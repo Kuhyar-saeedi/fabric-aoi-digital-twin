@@ -159,6 +159,10 @@
                 <span class="slider-label">Speed Multiplier: <span id="speedVal" style="color:#fff;">1.0x</span></span>
                 <input type="range" id="speedSlider" min="0.5" max="3" step="0.1" value="1" oninput="adjustSpeed()">
             </div>
+            <div class="control-group">
+                <span class="slider-label" style="color:#f59e0b;">Rework QA: <span id="reworkQaVal" style="color:#fff;">75</span>%</span>
+                <input type="range" id="reworkQaSlider" min="0" max="100" step="1" value="75" oninput="adjustReworkQa()">
+            </div>
             <button class="btn-ctrl" id="pauseBtn" onclick="togglePause()">Pause</button>
             <button class="btn-ctrl btn-stop" onclick="emergencyStop()">E-Stop</button>
             <button class="btn-start" onclick="initiateCycle()">▶ Run Inspection Cycle</button>
@@ -271,6 +275,12 @@
             speedMultiplier = parseFloat(document.getElementById('speedSlider').value);
             document.getElementById('speedVal').innerText = speedMultiplier.toFixed(1) + "x";
             logEvent(`SCADA: Simulation speed coefficient adjusted to ${speedMultiplier.toFixed(1)}x`, "info");
+        }
+
+        function adjustReworkQa() {
+            const val = document.getElementById('reworkQaSlider').value;
+            document.getElementById('reworkQaVal').innerText = val;
+            logEvent(`Rework Unit: QA pass threshold set to 70% — current calibration score ${val}%.`, "info");
         }
 
         function togglePause() {
@@ -534,14 +544,48 @@
                     fabric.style.backgroundImage = "none"; fabric.style.background = "#dcfce7"; 
                     fabric.style.border = "3px dashed #10b981"; fabricIcon.innerText = "✅"; tooltip.innerText = "Restored";
                     
-                    logEvent("Routing: Feeding repaired component back down to main packaging station.");
-                    // To Return Junction (Center X=970, Fabric Left=940)
-                    await moveLinear(fabric, 940, 170, 800, execId);
-                    // Down to Main Line (Center Y=400, Fabric Top=370)
-                    await moveLinear(fabric, 940, 370, 1000, execId);
-                    // To Pack Node (Left=1080)
-                    await moveLinear(fabric, 1080, 370, 1000, execId);
-                    
+                    // --- Rework QA Loop: re-validate at the QC Scanner until the
+                    // Rework QA slider clears the 70% threshold ---
+                    let qaPassed = false;
+                    while (!qaPassed) {
+                        if (isStopped || execId !== globalExecutionId) throw "STOPPED";
+
+                        logEvent("Routing: Feeding reworked component to QC Scanner for re-validation.", "info");
+                        tooltip.innerText = "QA Re-check";
+                        // To Return Junction (Center X=970, Fabric Left=940)
+                        await moveLinear(fabric, 940, 170, 800, execId);
+                        // Down to Main Line (Center Y=400, Fabric Top=370)
+                        await moveLinear(fabric, 940, 370, 1000, execId);
+                        // Back to QC Scanner (Center X=520, Fabric Left=490)
+                        await moveLinear(fabric, 490, 370, 2000, execId);
+
+                        nScanner.classList.add('scanning');
+                        await syncSleep(800, execId);
+                        nScanner.classList.remove('scanning');
+
+                        const reworkQa = parseInt(document.getElementById('reworkQaSlider').value);
+                        if (reworkQa >= 70) {
+                            logEvent(`QC Scanner: Rework QA score ${reworkQa}% meets 70% threshold. Component cleared for packaging.`, "info");
+                            qaPassed = true;
+                            tooltip.innerText = "QA Passed";
+                            // To Pack Node (Left=1080)
+                            await moveLinear(fabric, 1080, 370, 3000, execId);
+                        } else {
+                            logEvent(`QC Scanner: Rework QA score ${reworkQa}% below 70% threshold. Returning to Rework Unit.`, "warn");
+                            tooltip.innerText = "QA Failed";
+                            // To Junction (Center X=770, Fabric Left=740)
+                            await moveLinear(fabric, 740, 370, 1500, execId);
+                            // Up to Repair H-Belt (Center Y=200, Fabric Top=170)
+                            await moveLinear(fabric, 740, 170, 1000, execId);
+                            // To Repair Node (Center X=880, Fabric Left=850)
+                            await moveLinear(fabric, 850, 170, 1000, execId);
+
+                            logEvent("Rework Node: Re-executing structural stitching & calibration.", "info");
+                            tooltip.innerText = "Rework Active"; document.getElementById('nRepair').classList.add('repairing');
+                            await syncSleep(2000, execId); document.getElementById('nRepair').classList.remove('repairing');
+                        }
+                    }
+
                     logEvent("HRC Cell: Packing cell handling repaired secondary resource.");
                     tooltip.innerText = "HRC Pack"; document.body.classList.add('packing');
                     await syncSleep(1500, execId);

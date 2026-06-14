@@ -75,6 +75,8 @@ st.markdown("""
    scanned by the Digital Twin Hub (ResNet18), and routed to the HRC packing
    cell, the rework unit, or the shredder/recycle loop depending on the
    prediction.
+6. **Project Reports** — view and download the final written report and
+   presentation slides directly from the dashboard.
 """)
 
 st.info(

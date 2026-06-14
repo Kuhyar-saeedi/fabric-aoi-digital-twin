@@ -73,11 +73,15 @@ html = (
     .replace("__CONF__", f"{confidence:.1%}")
 )
 
-components.html(html, height=700, scrolling=False)
+components.html(html, height=760, scrolling=False)
 
 st.caption(
     f"Selected frame: **{cls}/{fname}** — Digital Twin Core (ResNet18) predicts "
     f"**{pred_class}** at **{confidence:.1%}** confidence. Click **▶ Run Inspection Cycle** "
     "inside the floor view to animate the part through weaving, the QC scanner, and its "
-    "routed destination. Picking a new image reloads the floor for the next cycle."
+    "routed destination. Picking a new image reloads the floor for the next cycle. For "
+    "**Line** defects, drag the **Rework QA** slider before/during the rework loop: at or "
+    "above 70% the repaired part clears the QC Scanner and proceeds to packing/warehouse; "
+    "below 70% it is sent back to the Rework Unit and re-checked, looping until the QA "
+    "score clears the threshold."
 )

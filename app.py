@@ -70,6 +70,11 @@ st.markdown("""
 4. **Quality Assistant** — ask natural-language questions about defect causes,
    corrective actions, the ISO 23247 mapping, and quality standards. Answers are
    retrieved (with sources) from a small SOP knowledge base.
+5. **Live Process** — an animated SCADA-style factory floor (OME → DCE → DT Core
+   → User Entity). Pick a frame, run an inspection cycle, and watch it woven,
+   scanned by the Digital Twin Hub (ResNet18), and routed to the HRC packing
+   cell, the rework unit, or the shredder/recycle loop depending on the
+   prediction.
 """)
 
 st.info(

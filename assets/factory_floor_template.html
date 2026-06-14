@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Industry 4.0: Dynamic Digital Twin SCADA</title>
+    <style>
+        body { margin: 0; background-color: #020617; color: #e2e8f0; font-family: 'Segoe UI', Tahoma, sans-serif; overflow: hidden; }
+        
+        /* Blueprint Grid Background */
+        body::before { content: ''; position: absolute; width: 100%; height: 100%; background: linear-gradient(rgba(14, 165, 233, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(14, 165, 233, 0.1) 1px, transparent 1px); background-size: 40px 40px; pointer-events: none; z-index: 0; }
+
+        /* SCADA Header */
+        .header-panel { position: relative; width: 100%; background: rgba(2, 6, 23, 0.95); border-bottom: 2px solid #0ea5e9; padding: 15px 40px; display: flex; justify-content: space-between; align-items: center; z-index: 1000; box-shadow: 0 5px 25px rgba(14, 165, 233, 0.2); box-sizing: border-box; }
+        .header-panel h1 { margin: 0; font-size: 20px; color: #fff; text-transform: uppercase; letter-spacing: 2px; }
+        .header-panel span { color: #0ea5e9; }
+        .upload-section { display: flex; gap: 20px; align-items: center; }
+        
+        /* Interactive Controls */
+        .control-group { display: flex; gap: 10px; align-items: center; background: #1e293b; padding: 5px 15px; border-radius: 6px; border: 1px solid #334155; }
+        .slider-label { font-size: 11px; font-weight: bold; text-transform: uppercase; color: #38bdf8; }
+        .btn-start { background: linear-gradient(135deg, #0284c7, #0ea5e9); color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; text-transform: uppercase; transition: 0.3s; }
+        .btn-start:hover { transform: scale(1.02); box-shadow: 0 0 15px rgba(14, 165, 233, 0.6); }
+        .btn-ctrl { background: #334155; color: white; border: 1px solid #475569; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; text-transform: uppercase; font-size: 11px; }
+        .btn-ctrl:hover { background: #475569; }
+        .btn-stop { border-color: #ef4444; color: #ef4444; }
+        .btn-stop:hover { background: #ef4444; color: white; }
+
+        /* Factory Floor */
+        .factory-floor { position: relative; width: 1600px; height: 800px; margin: 0; border: 2px solid #1e293b; background: rgba(15, 23, 42, 0.6); box-shadow: inset 0 0 50px rgba(0,0,0,0.8); z-index: 10; border-radius: 8px; overflow: hidden; transform: scale(0.7); transform-origin: top left; }
+        .floor-container { width: 1120px; height: 560px; margin: 20px auto 0; overflow: hidden; }
+
+        /* Conveyor Belts */
+        .belt { position: absolute; background: #0f172a; border: 2px solid #334155; box-sizing: border-box; z-index: 1; }
+        .belt-h::after { content: ''; position: absolute; width: 100%; height: 100%; background: repeating-linear-gradient(90deg, transparent, transparent 15px, rgba(255,255,255,0.08) 15px, rgba(255,255,255,0.08) 20px); animation: mH 1s linear infinite; }
+        .belt-h-rev::after { content: ''; position: absolute; width: 100%; height: 100%; background: repeating-linear-gradient(-90deg, transparent, transparent 15px, rgba(255,255,255,0.08) 15px, rgba(255,255,255,0.08) 20px); animation: mHRev 1s linear infinite; }
+        .belt-vu::after { content: ''; position: absolute; width: 100%; height: 100%; background: repeating-linear-gradient(0deg, transparent, transparent 15px, rgba(255,255,255,0.08) 15px, rgba(255,255,255,0.08) 20px); animation: mVU 1s linear infinite; }
+        .belt-vd::after { content: ''; position: absolute; width: 100%; height: 100%; background: repeating-linear-gradient(0deg, transparent, transparent 15px, rgba(255,255,255,0.08) 15px, rgba(255,255,255,0.08) 20px); animation: mVD 1s linear infinite; }
+        @keyframes mH { to { background-position: 40px 0; } } @keyframes mHRev { to { background-position: -40px 0; } } @keyframes mVU { to { background-position: 0 -40px; } } @keyframes mVD { to { background-position: 0 40px; } }
+
+        /* Main Network Center coordinates -> Center Y: 400px */
+        .b-main { width: 1250px; height: 40px; left: 150px; top: 380px; }
+        /* Rework Up Center X: 770px */
+        .b-rep-up { width: 40px; height: 200px; left: 750px; top: 180px; }
+        /* Rework Horiz Center Y: 200px */
+        .b-rep-h { width: 240px; height: 40px; left: 750px; top: 180px; }
+        /* Rework Down Center X: 970px */
+        .b-rep-down { width: 40px; height: 200px; left: 950px; top: 180px; }
+        
+        /* Recycle Down Center X: 770px */
+        .b-rec-down { width: 40px; height: 200px; left: 750px; top: 420px; }
+        /* Recycle Horiz Center Y: 600px */
+        .b-rec-h { width: 240px; height: 40px; left: 750px; top: 580px; }
+
+        /* Return Logistics Center X: 880, Y: 720, X: 110 */
+        .b-ret-down { width: 40px; height: 70px; left: 860px; top: 650px; }
+        .b-ret-h { width: 810px; height: 40px; left: 90px; top: 700px; border-color: #10b981; }
+        .b-ret-up { width: 40px; height: 240px; left: 90px; top: 460px; border-color: #10b981; }
+
+        /* Nodes */
+        .node { position: absolute; background: #1e293b; border: 2px solid #475569; border-radius: 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10; font-size: 11px; font-weight: bold; color: #94a3b8; text-transform: uppercase; box-shadow: 0 10px 20px rgba(0,0,0,0.5); }
+        
+        #nRaw { width: 120px; height: 120px; left: 30px; top: 340px; border-color: #8b5cf6; }
+        #nWeaver { width: 120px; height: 100px; left: 180px; top: 350px; border-color: #6366f1; }
+        
+        /* QC Scanner Node */
+        #nScanner { width: 140px; height: 140px; left: 450px; top: 330px; border-color: #0ea5e9; background: #000; box-shadow: inset 0 0 20px rgba(14,165,233,0.2); overflow: hidden; z-index: 25; }
+        .scan-bed { position: absolute; width: 100%; height: 100%; border: 2px dashed #334155; box-sizing: border-box; z-index: 1; }
+        .robotic-arm { position: absolute; width: 60px; height: 35px; background: linear-gradient(180deg, #475569, #1e293b); border: 2px solid #0ea5e9; border-radius: 4px; display: flex; justify-content: center; align-items: center; z-index: 26; box-shadow: 0 5px 15px rgba(0,0,0,0.8); transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        .robotic-arm::before { content: ''; width: 14px; height: 14px; background: #000; border: 2px solid #fff; border-radius: 50%; box-shadow: inset 0 0 5px #0ea5e9; }
+        .arm-top { top: -50px; left: 40px; } .arm-bot { bottom: -50px; left: 40px; } 
+        
+        .cam-flash { position: absolute; width: 100%; height: 100%; background: #fff; top: 0; left: 0; opacity: 0; z-index: 30; border-radius: 4px; pointer-events: none; }
+        .flash-active { animation: snapshotFlash 0.3s ease-out; }
+        @keyframes snapshotFlash { 0% { opacity: 1; box-shadow: 0 0 50px 20px rgba(255,255,255,0.8); } 100% { opacity: 0; } }
+
+        .hardware-laser { position: absolute; width: 100%; height: 2px; background: #ef4444; box-shadow: 0 0 15px 5px rgba(239, 68, 68, 0.8); top: 50%; opacity: 0; z-index: 24; }
+        .scanning .hardware-laser { opacity: 1; animation: hardwareScan 0.5s infinite alternate; }
+        @keyframes hardwareScan { from { transform: translateY(-30px); } to { transform: translateY(30px); } }
+
+        /* Nodes Coordinates */
+        #nRepair { width: 140px; height: 100px; left: 810px; top: 150px; border-color: #f59e0b; }
+        #nPack { width: 140px; height: 100px; left: 1020px; top: 350px; border-color: #10b981; }
+        #nRecycle { width: 140px; height: 100px; left: 810px; top: 550px; border-color: #ef4444; }
+        #nWaste { width: 100px; height: 100px; left: 830px; top: 680px; border: 2px dashed #78716c; }
+        
+        /* WMS Warehouse */
+        #nWarehouse { width: 200px; height: 140px; left: 1300px; top: 330px; border-color: #3b82f6; align-items: flex-start; padding: 10px; box-sizing: border-box; }
+        .wh-count { background: #2563eb; color: #fff; padding: 2px 8px; border-radius: 10px; margin-top: 5px; font-size: 14px; }
+        .wh-grid { display: flex; gap: 10px; margin-top: 15px; width: 100%; justify-content: center; }
+        .wh-box { font-size: 24px; opacity: 0.2; transition: 0.3s; filter: grayscale(1); }
+        .wh-box.stored { opacity: 1; filter: grayscale(0); transform: scale(1.1); }
+        .truck { position: absolute; font-size: 60px; left: 1650px; top: 360px; z-index: 30; transform: scaleX(-1); transition: all 2s ease-in-out; }
+
+        /* HRC Cell */
+        .hrc-cobot { position: absolute; width: 40px; height: 40px; background: #1e293b; border: 3px solid #10b981; border-radius: 50%; left: 1050px; top: 290px; z-index: 15; display: flex; justify-content: center; align-items: center; }
+        .hrc-cobot-arm { position: absolute; width: 50px; height: 8px; background: #10b981; top: 16px; left: 20px; transform-origin: left center; border-radius: 4px; transition: 0.3s; }
+        .hrc-human { position: absolute; width: 30px; height: 30px; background: #e2e8f0; border: 2px solid #3b82f6; border-radius: 50%; left: 1090px; top: 460px; z-index: 15; }
+        .hrc-human::before { content: ''; position: absolute; width: 40px; height: 12px; background: #3b82f6; top: 9px; left: -5px; border-radius: 6px; z-index: -1; }
+        .human-arm { position: absolute; width: 8px; height: 25px; background: #3b82f6; top: -20px; border-radius: 4px; transition: 0.2s; }
+        .ha-l { left: -5px; } .ha-r { right: -5px; }
+
+        .packing .hrc-cobot-arm { animation: swingArm 1s infinite; }
+        .packing .ha-l { animation: reachL 0.5s infinite alternate; }
+        .packing .ha-r { animation: reachR 0.5s infinite alternate; animation-delay: 0.2s; }
+        @keyframes swingArm { 0% { transform: rotate(0deg); } 50% { transform: rotate(60deg); } 100% { transform: rotate(0deg); } }
+        @keyframes reachL { to { transform: translateY(-10px) rotate(15deg); } }
+        @keyframes reachR { to { transform: translateY(-10px) rotate(-15deg); } }
+
+        /* Dynamic Product Representation */
+        /* Center Y = 400. Fabric size 60x60 => Top: 370px */
+        .fabric-item { position: absolute; width: 60px; height: 60px; background: #475569; border: 2px solid #cbd5e1; left: 90px; top: 370px; z-index: 20; opacity: 0; display: flex; align-items: center; justify-content: center; font-size: 28px; box-shadow: 0 5px 10px rgba(0,0,0,0.5); border-radius: 4px; transition: opacity 0.3s; }
+        .item-tooltip { position: absolute; bottom: -25px; background: #0f172a; border: 1px solid #3b82f6; color: #fff; font-size: 10px; padding: 3px 6px; border-radius: 4px; white-space: nowrap; font-weight: bold; z-index: 21; }
+        .box-item { position: absolute; width: 60px; height: 60px; background: #a16207; border: 2px solid #713f12; left: 1090px; top: 370px; z-index: 21; opacity: 0; display: flex; align-items: center; justify-content: center; border-radius: 4px; color: rgba(255,255,255,0.7); font-weight: bold; font-size: 12px; transition: opacity 0.3s; }
+
+        /* Pipes (For Waste Only) */
+        svg.pipes { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
+        .pipe { fill: none; stroke: #334155; stroke-width: 8; stroke-dasharray: 15; }
+        .pipe-flow-red { animation: pFlow 1.5s linear infinite; stroke: #ef4444; }
+        @keyframes pFlow { to { stroke-dashoffset: -100; } }
+        
+        /* Particle Size 12x12 */
+        .particle { position: absolute; width: 12px; height: 12px; background: #fff; border-radius: 50%; z-index: 5; opacity: 0; box-shadow: 0 0 10px #fff; }
+
+        /* EVENT TERMINAL */
+        .event-terminal { position: fixed; bottom: 20px; right: 20px; width: 420px; height: 240px; background: rgba(2, 6, 23, 0.95); border: 2px solid #3b82f6; border-radius: 8px; box-shadow: 0 10px 30px rgba(59, 130, 246, 0.3); z-index: 3000; display: flex; flex-direction: column; overflow: hidden; backdrop-filter: blur(5px); transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1); }
+        .event-terminal.expanded { width: 700px; height: 450px; }
+        .et-header { background: #1e293b; padding: 12px 20px; color: #0ea5e9; font-weight: bold; font-size: 13px; text-transform: uppercase; border-bottom: 2px solid #3b82f6; display: flex; justify-content: space-between; align-items: center; }
+        .et-body { flex: 1; padding: 15px; overflow-y: auto; font-family: 'Consolas', monospace; font-size: 13px; color: #cbd5e1; display: flex; flex-direction: column; gap: 8px; line-height: 1.4; }
+        .event-terminal.expanded .et-body { font-size: 15px; }
+        .log-entry { display: flex; gap: 10px; animation: slideIn 0.2s ease-out; }
+        .log-time { color: #64748b; }
+        .log-msg { color: #10b981; } .log-msg.warn { color: #f59e0b; } .log-msg.err { color: #ef4444; } .log-msg.info { color: #0ea5e9; }
+        @keyframes slideIn { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: translateX(0); } }
+
+        /* HUD Overlay */
+        .dt-hud-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 2000; display: flex; justify-content: center; align-items: center; opacity: 0; pointer-events: none; transition: opacity 0.3s; backdrop-filter: blur(5px); }
+        .dt-panel { width: 900px; height: 500px; background: #0f172a; border: 1px solid #0ea5e9; border-radius: 12px; display: flex; overflow: hidden; box-shadow: 0 0 60px rgba(14, 165, 233, 0.3); }
+        .dt-visual { width: 55%; background: #000; position: relative; border-right: 1px solid #334155; display: flex; justify-content: center; align-items: center; flex-direction: column; }
+        .dt-target-img { width: 80%; height: 70%; border: 2px dashed #0ea5e9; background-size: cover; background-position: center; position: relative; }
+        .dt-target-img::before { content: ''; position: absolute; width: 100%; height: 100%; background: linear-gradient(rgba(14, 165, 233, 0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(14, 165, 233, 0.3) 1px, transparent 1px); background-size: 20px 20px; pointer-events: none; }
+        .hud-laser { position: absolute; width: 100%; height: 4px; background: #0ea5e9; box-shadow: 0 0 20px 10px rgba(14,165,233,0.6); top: 0; animation: hudScan 1.5s linear infinite; }
+        @keyframes hudScan { 0% { top: 0; } 100% { top: 100%; } }
+        .dt-data { width: 45%; padding: 30px; display: flex; flex-direction: column; gap: 15px; }
+        .dt-header { color: #0ea5e9; font-size: 16px; margin: 0; border-bottom: 2px solid #334155; padding-bottom: 10px; text-transform: uppercase; }
+        .dt-metric { background: rgba(30,41,59,0.5); padding: 12px; border-radius: 8px; border: 1px solid #1e293b; display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+        .dt-m-title { color: #cbd5e1; font-weight: bold; }
+        .dt-m-val { color: #10b981; font-weight: bold; font-family: monospace; }
+        .loading { color: #f59e0b; animation: blink 1s infinite; }
+        @keyframes blink { 50% { opacity: 0; } }
+        .dt-verdict { margin-top: auto; padding: 20px; background: #1e293b; border: 1px solid #334155; border-radius: 8px; text-align: center; font-size: 16px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div class="header-panel">
+        <h1>Digital Twin <span>IoT Ecosystem</span></h1>
+        <div class="upload-section">
+            <div class="control-group">
+                <span class="slider-label">Speed Multiplier: <span id="speedVal" style="color:#fff;">1.0x</span></span>
+                <input type="range" id="speedSlider" min="0.5" max="3" step="0.1" value="1" oninput="adjustSpeed()">
+            </div>
+            <button class="btn-ctrl" id="pauseBtn" onclick="togglePause()">Pause</button>
+            <button class="btn-ctrl btn-stop" onclick="emergencyStop()">E-Stop</button>
+            <button class="btn-start" onclick="initiateCycle()">▶ Run Inspection Cycle</button>
+        </div>
+    </div>
+
+    <div class="floor-container">
+    <div class="factory-floor">
+        <svg class="pipes">
+            <path id="pipeWaste" class="pipe" d="M 880 650 L 880 680" />
+        </svg>
+
+        <div class="belt belt-h b-main"></div>
+        <div class="belt belt-vu b-rep-up"></div>
+        <div class="belt belt-h b-rep-h"></div>
+        <div class="belt belt-vd b-rep-down"></div>
+        <div class="belt belt-vd b-rec-down"></div>
+        <div class="belt belt-h b-rec-h"></div>
+        
+        <div class="belt belt-vd b-ret-down"></div>
+        <div class="belt belt-h-rev b-ret-h"></div>
+        <div class="belt belt-vu b-ret-up"></div>
+
+        <div class="node" id="nRaw"><div style="font-size: 30px;">📦</div><div class="node-label">Raw Silo</div></div>
+        <div class="node" id="nWeaver"><div style="font-size: 24px;">⚙️</div><div class="node-label">Weaving Unit</div></div>
+        
+        <div class="node" id="nScanner">
+            <div class="scan-bed"></div>
+            <div class="robotic-arm arm-top" id="hwArmTop"></div>
+            <div class="robotic-arm arm-bot" id="hwArmBot"></div>
+            <div class="hardware-laser"></div>
+            <div class="cam-flash" id="camFlash"></div>
+            <div class="node-label" style="color:#0ea5e9; z-index:30; position:absolute; bottom:10px;">Digital Twin Hub</div>
+        </div>
+
+        <div class="node" id="nRepair"><div style="font-size: 24px;">🪡</div><div class="node-label" style="color:#f59e0b;">Rework Unit</div></div>
+        <div class="node" id="nPack"><div class="node-label" style="color:#10b981;">HRC Pack Cell</div></div>
+        <div class="node" id="nRecycle"><div style="font-size: 24px;">♻️</div><div class="node-label" style="color:#ef4444;">Shredder</div></div>
+        <div class="node" id="nWaste"><div style="font-size: 20px;">🗑️</div><div class="node-label" style="color:#78716c;">20% Waste</div></div>
+        
+        <div class="node" id="nWarehouse">
+            <div class="node-label" style="color:#3b82f6; font-size:12px;">WMS Inventory</div>
+            <div class="wh-count" id="whCount">0 / 3</div>
+            <div class="wh-grid">
+                <div class="wh-box" id="wb1">📦</div><div class="wh-box" id="wb2">📦</div><div class="wh-box" id="wb3">📦</div>
+            </div>
+        </div>
+
+        <div class="hrc-cobot" id="cobot"><div class="hrc-cobot-arm"></div></div>
+        <div class="hrc-human"><div class="human-arm ha-l"></div><div class="human-arm ha-r"></div></div>
+        <div class="truck" id="truck">🚚</div>
+
+        <div class="fabric-item" id="fabricObj"><span id="fabricIcon"></span><div class="item-tooltip" id="tooltip">Idle</div></div>
+        <div class="box-item" id="boxObj">PKG</div>
+        
+        <div class="particle" id="ptGreen" style="background:#10b981; border: 2px solid #059669;"></div>
+        <div class="particle" id="ptRed" style="background:#ef4444; border-radius:50%; width:12px; height:12px;"></div>
+    </div>
+    </div>
+
+    <div class="event-terminal" id="terminal">
+        <div class="et-header">
+            <span>Production Event Log</span> 
+            <button onclick="toggleTerminalSize()" style="background:none; border:1px solid #0ea5e9; color:#0ea5e9; cursor:pointer; font-size:11px; padding:2px 8px; border-radius:3px;">Expand Log</button>
+        </div>
+        <div class="et-body" id="eventBody">
+            <div class="log-entry"><span class="log-time">[SYS]</span> <span class="log-msg info">SCADA Control Core active. Node mesh locked.</span></div>
+        </div>
+    </div>
+
+    <div class="dt-hud-overlay" id="dtOverlay">
+        <div class="dt-panel">
+            <div class="dt-visual">
+                <div class="dt-target-img" id="dtTarget"><div class="hud-laser"></div></div>
+                <div style="margin-top: 15px; color:#0ea5e9; font-family: monospace; font-weight:bold;">IOT CLOUD IMAGE TELEMETRY</div>
+            </div>
+            <div class="dt-data">
+                <h2 class="dt-header">Digital Twin Node Diagnostics</h2>
+                <div class="dt-metric"><span class="dt-m-title">Hardware Arms</span><span class="dt-m-val">DEPLOYED</span></div>
+                <div class="dt-metric"><span class="dt-m-title">IoT Proximity Mesh</span><span class="dt-m-val">LOCKED</span></div>
+                <div class="dt-metric"><span class="dt-m-title">ResNet18 Core Tensor</span><span class="dt-m-val loading" id="mSync">COMPUTING...</span></div>
+                <div class="dt-metric"><span class="dt-m-title">Prediction Confidence</span><span class="dt-m-val">__CONF__</span></div>
+                <div class="dt-verdict" id="dtVerdict">PROCESSING CLOUD INFERENCE...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const INJECTED_IMAGE = "data:image/jpeg;base64,__IMG_B64__";
+        const INJECTED_PREDICTION = "__PRED_CLASS__";
+        let globalExecutionId = 0;
+        let warehouseInventory = 0;
+        
+        // Engine Control Flags
+        let isPaused = false;
+        let isStopped = false;
+        let speedMultiplier = 1.0;
+
+        function logEvent(msg, type = "info") {
+            const body = document.getElementById('eventBody');
+            const time = new Date().toLocaleTimeString([], {hour12: false, hour: '2-digit', minute:'2-digit', second:'2-digit'});
+            const entry = document.createElement('div');
+            entry.className = "log-entry";
+            entry.innerHTML = `<span class="log-time">[${time}]</span> <span class="log-msg ${type}">${msg}</span>`;
+            body.appendChild(entry);
+            body.scrollTop = body.scrollHeight;
+        }
+
+        function adjustSpeed() {
+            speedMultiplier = parseFloat(document.getElementById('speedSlider').value);
+            document.getElementById('speedVal').innerText = speedMultiplier.toFixed(1) + "x";
+            logEvent(`SCADA: Simulation speed coefficient adjusted to ${speedMultiplier.toFixed(1)}x`, "info");
+        }
+
+        function togglePause() {
+            isPaused = !isPaused;
+            const btn = document.getElementById('pauseBtn');
+            if (isPaused) {
+                btn.innerText = "Resume";
+                btn.style.background = "#10b981";
+                logEvent("SCADA: Execution paused by operator command.", "warn");
+                document.querySelectorAll('.belt').forEach(b => b.style.animationPlayState = 'paused');
+            } else {
+                btn.innerText = "Pause";
+                btn.style.background = "#334155";
+                logEvent("SCADA: Execution resumed.", "info");
+                document.querySelectorAll('.belt').forEach(b => b.style.animationPlayState = 'running');
+            }
+        }
+
+        function emergencyStop() {
+            isStopped = true;
+            isPaused = false;
+            document.getElementById('pauseBtn').innerText = "Pause";
+            document.getElementById('pauseBtn').style.background = "#334155";
+            document.querySelectorAll('.belt').forEach(b => b.style.animationPlayState = 'paused');
+            
+            // Fast reset elements
+            document.getElementById('fabricObj').style.opacity = "0";
+            document.getElementById('boxObj').style.opacity = "0";
+            document.getElementById('dtOverlay').style.opacity = "0";
+            document.getElementById('nScanner').classList.remove('scanning');
+            document.body.classList.remove('packing');
+            document.getElementById('hwArmTop').style.transform = "none";
+            document.getElementById('hwArmBot').style.transform = "none";
+            document.getElementById('ptGreen').style.opacity = "0";
+            document.getElementById('ptRed').style.opacity = "0";
+            
+            logEvent("⚠️ CRITICAL: EMERGENCY STOP ACTIVATED. All actuators killed.", "err");
+        }
+
+        function toggleTerminalSize() {
+            const term = document.getElementById('terminal');
+            term.classList.toggle('expanded');
+        }
+
+        // --- Core Kinematic Animation Engine ---
+        function moveLinear(el, targetX, targetY, baseDuration, execId) {
+            return new Promise((resolve, reject) => {
+                let startX = parseFloat(el.style.left) || 0;
+                let startY = parseFloat(el.style.top) || 0;
+                let elapsed = 0;
+                let lastTime = performance.now();
+
+                function frame(timestamp) {
+                    if (isStopped || execId !== globalExecutionId) { reject("STOPPED_OR_OVERRIDDEN"); return; }
+                    
+                    let now = performance.now();
+                    if (!isPaused) {
+                        elapsed += (now - lastTime) * speedMultiplier;
+                    }
+                    lastTime = now;
+
+                    let progress = elapsed / baseDuration;
+                    if (progress > 1) progress = 1;
+
+                    el.style.left = `${startX + (targetX - startX) * progress}px`;
+                    el.style.top = `${startY + (targetY - startY) * progress}px`;
+
+                    if (progress < 1) {
+                        requestAnimationFrame(frame);
+                    } else {
+                        resolve();
+                    }
+                }
+                requestAnimationFrame(frame);
+            });
+        }
+
+        function syncSleep(ms, execId) {
+            return new Promise((resolve, reject) => {
+                let elapsed = 0;
+                let lastTime = performance.now();
+
+                function step() {
+                    if (isStopped || execId !== globalExecutionId) { reject("STOPPED_OR_OVERRIDDEN"); return; }
+                    let now = performance.now();
+                    if (!isPaused) {
+                        elapsed += (now - lastTime) * speedMultiplier;
+                    }
+                    lastTime = now;
+
+                    if (elapsed >= ms) {
+                        resolve();
+                    } else {
+                        requestAnimationFrame(step);
+                    }
+                }
+                requestAnimationFrame(step);
+            });
+        }
+
+        async function executeTruckLogistics(execId) {
+            logEvent("WMS Alert: Capacity limit reached (3/3). Requesting dispatch vehicle.", "warn");
+            const truck = document.getElementById('truck');
+            truck.style.left = "1400px";
+            await syncSleep(2000, execId);
+            
+            document.getElementById('wb1').classList.remove('stored');
+            document.getElementById('wb2').classList.remove('stored');
+            document.getElementById('wb3').classList.remove('stored');
+            document.getElementById('whCount').innerText = "0 / 3";
+            warehouseInventory = 0;
+            logEvent("Logistics: Secure freight loading complete. Dispatching to customer.");
+            
+            truck.style.transform = "scaleX(1)";
+            let elapsed = 0; let start = performance.now();
+            while(elapsed < 2000) {
+                if (isStopped || execId !== globalExecutionId) break;
+                if (!isPaused) elapsed += (performance.now() - start) * speedMultiplier;
+                start = performance.now();
+                truck.style.left = (1400 + (elapsed/2000)*400) + "px";
+                await new Promise(r => requestAnimationFrame(r));
+            }
+            truck.style.left = "1650px";
+            truck.style.transform = "scaleX(-1)";
+        }
+
+        async function initiateCycle() {
+            globalExecutionId++;
+            const execId = globalExecutionId;
+            isStopped = false;
+            document.querySelectorAll('.belt').forEach(b => b.style.animationPlayState = 'running');
+
+            const fabric = document.getElementById('fabricObj');
+            const box = document.getElementById('boxObj');
+            const tooltip = document.getElementById('tooltip');
+            const fabricIcon = document.getElementById('fabricIcon');
+            const dtOverlay = document.getElementById('dtOverlay');
+            const dtTarget = document.getElementById('dtTarget');
+            const dtVerdict = document.getElementById('dtVerdict');
+            
+            const nScanner = document.getElementById('nScanner');
+            const hwTop = document.getElementById('hwArmTop');
+            const hwBot = document.getElementById('hwArmBot');
+            const camFlash = document.getElementById('camFlash');
+            
+            const ptGreen = document.getElementById('ptGreen');
+            const ptRed = document.getElementById('ptRed');
+
+            // --- Reset Artifacts ---
+            // Center of b-main Y=400. Fabric H=60 -> Top=370. Start X=150 -> Fabric Center X=150 -> Left=120
+            fabric.style.left = "120px"; fabric.style.top = "370px"; fabric.style.opacity = "0";
+            fabric.style.background = "#475569"; fabric.style.border = "2px solid #cbd5e1"; 
+            fabric.style.backgroundImage = "none"; fabricIcon.innerText = "";
+            box.style.opacity = "0"; ptGreen.style.opacity = "0"; ptRed.style.opacity = "0";
+            hwTop.style.transform = "none"; hwBot.style.transform = "none";
+            camFlash.classList.remove('flash-active');
+            
+            nScanner.classList.remove('scanning'); document.body.classList.remove('packing');
+            document.getElementById('pipeWaste').classList.remove('pipe-flow-red');
+
+            dtTarget.style.backgroundImage = `url(${INJECTED_IMAGE})`;
+
+            try {
+                await syncSleep(100, execId);
+
+                // Phase 1: Weaving
+                logEvent("MFG: Transforming raw materials into uniform fabric layer.", "info");
+                fabric.style.opacity = "1";
+                tooltip.innerText = "Weaving Unit";
+                
+                // Move to Scanner (Scanner Center X=520, Fabric Left=490)
+                await moveLinear(fabric, 490, 370, 2500, execId); 
+
+                // Phase 2: Hardware Sensor Deployment (Physical Scan)
+                logEvent("IoT Hub: Product detected. Deploying dynamic camera actuators.", "info");
+                tooltip.innerText = "HW Scan";
+                
+                let armElapsed = 0; let armStart = performance.now();
+                while(armElapsed < 600) {
+                    if (isStopped || execId !== globalExecutionId) throw "STOPPED";
+                    if (!isPaused) armElapsed += (performance.now() - armStart) * speedMultiplier;
+                    armStart = performance.now();
+                    let ratio = Math.min(armElapsed / 600, 1);
+                    hwTop.style.transform = `translateY(${ratio * 60}px)`; 
+                    hwBot.style.transform = `translateY(${-ratio * 60}px)`; 
+                    await new Promise(r => requestAnimationFrame(r));
+                }
+                
+                nScanner.classList.add('scanning'); // Continuous HW laser
+                
+                logEvent("Optical Sensor: Capturing high-resolution physical snapshot...", "info");
+                camFlash.classList.add('flash-active');
+                await syncSleep(400, execId);
+                camFlash.classList.remove('flash-active');
+
+                // Phase 3: Digital Twin Synchronicity
+                logEvent("Digital Twin: Projecting cloud-synchronized IoT virtualization overlay.", "info");
+                dtOverlay.style.opacity = "1";
+
+                const data = { prediction: INJECTED_PREDICTION };
+                
+                await syncSleep(1500, execId); 
+                document.getElementById('mSync').className = "dt-m-val"; document.getElementById('mSync').innerText = "CONNECTED";
+                logEvent(`Neural Core: ResNet18 evaluation complete. Classification: ${data.prediction}`, "info");
+
+                hwTop.style.transform = "none"; hwBot.style.transform = "none";
+
+                // Phase 4: DYNAMIC ROUTING
+                if (data.prediction === "No defect") {
+                    dtVerdict.innerText = "VERDICT: HEALTHY MATERIAL. MAIN BELT.";
+                    dtVerdict.style.color = "#10b981"; dtVerdict.style.borderColor = "#10b981";
+                    
+                    await syncSleep(1500, execId); 
+                    dtOverlay.style.opacity = "0"; nScanner.classList.remove('scanning');
+                    
+                    logEvent("Routing: Pneumatic diverter tracks locked on primary belt.");
+                    fabric.style.backgroundImage = dtTarget.style.backgroundImage;
+                    tooltip.innerText = "In Transit";
+                    
+                    // Move to Pack Node (Center X=1110, Fabric Left=1080)
+                    await moveLinear(fabric, 1080, 370, 3500, execId);
+                    
+                    logEvent("HRC Cell: Cybernetic Cobot & Human operator executing product boxing.");
+                    tooltip.innerText = "HRC Pack"; document.body.classList.add('packing');
+                    await syncSleep(1500, execId);
+                    
+                    fabric.style.opacity = "0"; 
+                    box.style.left = "1080px"; box.style.top = "370px"; box.style.opacity = "1";
+                    document.body.classList.remove('packing');
+                    
+                    logEvent("WMS: Ingesting finalized stock into automated warehousing storage matrix.");
+                    // Move Box to WMS
+                    await moveLinear(box, 1340, 370, 1500, execId); box.style.opacity = "0";
+                    
+                    warehouseInventory++; document.getElementById('whCount').innerText = `${warehouseInventory} / 3`;
+                    document.getElementById(`wb${warehouseInventory}`).classList.add('stored');
+                    if (warehouseInventory === 3) { await executeTruckLogistics(execId); }
+
+                } else if (data.prediction === "Line") {
+                    dtVerdict.innerText = "VERDICT: STRUCTURAL FRACTURE. DIVERTING TO REWORK.";
+                    dtVerdict.style.color = "#f59e0b"; dtVerdict.style.borderColor = "#f59e0b";
+                    
+                    await syncSleep(1500, execId); 
+                    dtOverlay.style.opacity = "0"; nScanner.classList.remove('scanning');
+                    fabric.style.backgroundImage = dtTarget.style.backgroundImage;
+                    
+                    logEvent("Routing: Diverting component UPwards into secondary repair loop.", "warn");
+                    tooltip.innerText = "Routing Up";
+                    // To Junction (Center X=770, Fabric Left=740)
+                    await moveLinear(fabric, 740, 370, 1500, execId);
+                    // Up to Repair H-Belt (Center Y=200, Fabric Top=170)
+                    await moveLinear(fabric, 740, 170, 1000, execId);
+                    // To Repair Node (Center X=880, Fabric Left=850)
+                    await moveLinear(fabric, 850, 170, 1000, execId);
+                    
+                    logEvent("Rework Node: Executing structural stitching & automatic sewing patterns.", "info");
+                    tooltip.innerText = "Rework Active"; document.getElementById('nRepair').classList.add('repairing');
+                    await syncSleep(2000, execId); document.getElementById('nRepair').classList.remove('repairing');
+                    
+                    logEvent("Rework Node: Calibration certified. Component integrity restored.", "info");
+                    fabric.style.backgroundImage = "none"; fabric.style.background = "#dcfce7"; 
+                    fabric.style.border = "3px dashed #10b981"; fabricIcon.innerText = "✅"; tooltip.innerText = "Restored";
+                    
+                    logEvent("Routing: Feeding repaired component back down to main packaging station.");
+                    // To Return Junction (Center X=970, Fabric Left=940)
+                    await moveLinear(fabric, 940, 170, 800, execId);
+                    // Down to Main Line (Center Y=400, Fabric Top=370)
+                    await moveLinear(fabric, 940, 370, 1000, execId);
+                    // To Pack Node (Left=1080)
+                    await moveLinear(fabric, 1080, 370, 1000, execId);
+                    
+                    logEvent("HRC Cell: Packing cell handling repaired secondary resource.");
+                    tooltip.innerText = "HRC Pack"; document.body.classList.add('packing');
+                    await syncSleep(1500, execId);
+                    fabric.style.opacity = "0"; box.style.left = "1080px"; box.style.top = "370px"; box.style.opacity = "1";
+                    document.body.classList.remove('packing');
+                    
+                    await moveLinear(box, 1340, 370, 1500, execId); box.style.opacity = "0";
+                    warehouseInventory++; document.getElementById('whCount').innerText = `${warehouseInventory} / 3`;
+                    document.getElementById(`wb${warehouseInventory}`).classList.add('stored');
+                    if (warehouseInventory === 3) { await executeTruckLogistics(execId); }
+
+                } else {
+                    dtVerdict.innerText = "VERDICT: SEVERE SURFACE HOLE. ROUTING TO RECYCLING CORES.";
+                    dtVerdict.style.color = "#ef4444"; dtVerdict.style.borderColor = "#ef4444";
+                    
+                    await syncSleep(1500, execId); 
+                    dtOverlay.style.opacity = "0"; nScanner.classList.remove('scanning');
+                    fabric.style.backgroundImage = dtTarget.style.backgroundImage;
+                    
+                    logEvent("Routing: Diverting structural failure DOWNwards into scrap shredder mechanisms.", "err");
+                    tooltip.innerText = "Routing Down";
+                    // To Junction (Center X=770, Fabric Left=740)
+                    await moveLinear(fabric, 740, 370, 1500, execId);
+                    // Down to Recycle H-Belt (Center Y=600, Fabric Top=570)
+                    await moveLinear(fabric, 740, 570, 1000, execId);
+                    // To Shredder Node (Center X=880, Fabric Left=850)
+                    await moveLinear(fabric, 850, 570, 1000, execId);
+                    
+                    logEvent("Recycle Unit: Shredding and liquefying synthetic fibers.", "err");
+                    tooltip.innerText = "Shredding"; document.getElementById('nRecycle').classList.add('shredding');
+                    await syncSleep(1500, execId);
+                    fabric.style.opacity = "0"; document.getElementById('nRecycle').classList.remove('shredding');
+                    
+                    // Circular Economy Flow
+                    logEvent("Circular Economy: Routing 80% raw polymers back to Main Silo via return conveyor.", "info");
+                    document.getElementById('pipeWaste').classList.add('pipe-flow-red');
+                    
+                    // Shredder Center X=880. ptGreen size=12x12 -> Left=874
+                    ptGreen.style.left = "874px"; ptGreen.style.top = "600px"; ptGreen.style.opacity = "1";
+                    ptRed.style.left = "874px"; ptRed.style.top = "650px"; ptRed.style.opacity = "1";
+                    
+                    // Red drops to waste (Center Y=730, Top=724)
+                    let pWaste = moveLinear(ptRed, 874, 724, 1000, execId);
+
+                    // Green follows return conveyor loop
+                    // 1. Down to return belt (Center Y=720, Top=714)
+                    await moveLinear(ptGreen, 874, 714, 1000, execId);
+                    // 2. Left across security return (Center X=110, Left=104)
+                    await moveLinear(ptGreen, 104, 714, 3500, execId);
+                    // 3. Up into Raw Silo (Top=460)
+                    await moveLinear(ptGreen, 104, 460, 1500, execId);
+                    
+                    ptGreen.style.opacity = "0"; ptRed.style.opacity = "0";
+                    document.getElementById('pipeWaste').classList.remove('pipe-flow-red');
+                    logEvent("Raw Silo: Reclaimed materials successfully integrated into inventory.", "info");
+                }
+            } catch (error) {
+                if (error !== "STOPPED_OR_OVERRIDDEN") {
+                    dtVerdict.innerText = "CRITICAL: NEURAL API DISCONNECTED";
+                    dtVerdict.style.color = "#ef4444"; dtVerdict.style.borderColor = "#ef4444";
+                    logEvent("SYS ERROR: Local network failed to establish link with FastAPI.", "err");
+                    await syncSleep(2000, execId); dtOverlay.style.opacity = "0"; nScanner.classList.remove('scanning');
+                }
+            }
+        }
+    </script>
+</body>
+</html>

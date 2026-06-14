@@ -108,12 +108,12 @@ class GradCAM:
 
 def overlay_cam(image: Image.Image, cam: np.ndarray, alpha: float = 0.45) -> Image.Image:
     """Overlay a Grad-CAM heatmap (values in [0,1]) on a PIL image using a jet colormap."""
-    import matplotlib.cm as cm
+    import matplotlib as mpl
 
     base = image.convert("RGB").resize((IMG_SIZE, IMG_SIZE))
     base_arr = np.asarray(base).astype(np.float32) / 255.0
 
-    heatmap = cm.get_cmap("jet")(cam)[:, :, :3]  # drop alpha channel
+    heatmap = mpl.colormaps["jet"](cam)[:, :, :3]  # drop alpha channel
     blended = (1 - alpha) * base_arr + alpha * heatmap
     blended = np.clip(blended * 255, 0, 255).astype(np.uint8)
     return Image.fromarray(blended)

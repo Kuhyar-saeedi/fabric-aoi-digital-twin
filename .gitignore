@@ -1,0 +1,7 @@
+# Full-resolution dataset (~900MB) — only dataset_web/ (downscaled) is
+# committed for deployment. Regenerate dataset/ locally if needed.
+/dataset/
+
+__pycache__/
+*.pyc
+.venv/

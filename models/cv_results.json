@@ -1,0 +1,68 @@
+{
+  "classes": [
+    "Circle",
+    "Line",
+    "No defect"
+  ],
+  "fold_accuracies": [
+    0.8666666666666667,
+    0.9666666666666667,
+    0.9666666666666667,
+    1.0,
+    0.9
+  ],
+  "avg_accuracy": 0.9400000000000001,
+  "std_accuracy": 0.04898979485566355,
+  "classification_report": {
+    "Circle": {
+      "precision": 0.8727272727272727,
+      "recall": 0.96,
+      "f1-score": 0.9142857142857143,
+      "support": 50.0
+    },
+    "Line": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 50.0
+    },
+    "No defect": {
+      "precision": 0.9555555555555556,
+      "recall": 0.86,
+      "f1-score": 0.9052631578947369,
+      "support": 50.0
+    },
+    "accuracy": 0.94,
+    "macro avg": {
+      "precision": 0.9427609427609428,
+      "recall": 0.94,
+      "f1-score": 0.9398496240601504,
+      "support": 150.0
+    },
+    "weighted avg": {
+      "precision": 0.9427609427609427,
+      "recall": 0.94,
+      "f1-score": 0.9398496240601505,
+      "support": 150.0
+    }
+  },
+  "confusion_matrix": [
+    [
+      48,
+      0,
+      2
+    ],
+    [
+      0,
+      50,
+      0
+    ],
+    [
+      7,
+      0,
+      43
+    ]
+  ],
+  "n_images": 150,
+  "epochs_per_fold": 8
+}

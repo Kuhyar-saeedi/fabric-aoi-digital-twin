@@ -3,7 +3,7 @@
 # Community Cloud's free tier anyway.
 --extra-index-url https://download.pytorch.org/whl/cpu
 
-streamlit>=1.33.0
+streamlit>=1.58.0
 torch==2.9.0
 torchvision==0.24.0
 numpy>=1.24.0
@@ -12,6 +12,7 @@ plotly>=5.18.0
 scikit-learn>=1.3.0
 matplotlib>=3.7.0
 Pillow>=10.0.0
+streamlit-pdf-viewer>=0.0.29
 
 # Optional — Quality Assistant upgrades (gated by try/except in core/rag.py,
 # the app works fine without them). Left disabled here to keep the deployed

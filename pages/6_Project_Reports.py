@@ -8,11 +8,10 @@ online without any local files.
 
 from __future__ import annotations
 
-import base64
 from pathlib import Path
 
 import streamlit as st
-import streamlit.components.v1 as components
+from streamlit_pdf_viewer import pdf_viewer
 
 st.set_page_config(page_title="Project Reports — Checkered Fabric AOI", page_icon="📄", layout="wide")
 
@@ -52,10 +51,4 @@ for tab, (label, path) in zip(tabs, DOCS.items()):
             key=f"dl_{path.name}",
         )
 
-        b64 = base64.b64encode(data).decode()
-        components.html(
-            f'<iframe src="data:application/pdf;base64,{b64}" '
-            f'width="100%" height="900" style="border:1px solid #334155; border-radius:8px;">'
-            f"</iframe>",
-            height=920,
-        )
+        pdf_viewer(input=data, width="100%", height=1100)

@@ -5,3 +5,7 @@
 __pycache__/
 *.pyc
 .venv/
+
+# Deliverables — not needed for the deployed app
+/report.pdf
+/presentation.pptx

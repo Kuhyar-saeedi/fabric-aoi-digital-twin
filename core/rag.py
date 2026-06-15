@@ -469,14 +469,492 @@ project report's critical-discussion section:
 ]  # end of _DOCS
 
 
+# ── Knowledge base (Italian) ─────────────────────────────────────────────────
+# Same 12 documents, translated. Class names ("Circle", "Line", "No defect")
+# are kept verbatim so that queries built around the (English) model class
+# names still retrieve the right document via TF-IDF.
+
+_DOCS_IT: List[dict] = [
+
+{
+"id": "process_overview",
+"title": "Panoramica del Processo — Linea di Tessitura e Ispezione del Tessuto a Quadretti",
+"content": """
+Il caso considerato è una linea di tessuto di cotone a quadretti in stile
+"gingham". Il filato viene tessuto su un telaio nel caratteristico motivo a
+quadretti blu/giallo, poi il tessuto passa sopra un telaio di
+finitura/ispezione prima di essere arrotolato sul rotolo di tessuto finale.
+
+Una stazione di Ispezione Ottica Automatica (AOI) è posizionata al telaio di
+ispezione: una telecamera acquisisce immagini della superficie del tessuto
+mentre si muove sotto un'illuminazione controllata. Ogni fotogramma acquisito
+viene analizzato da un modello di visione che classifica la porzione visibile
+in una delle tre categorie:
+
+- "Circle"    — un foro / una perforazione di forma approssimativamente
+  circolare nella trama
+- "Line"      — un graffio lineare, un taglio o un segno di abrasione lungo
+  la trama
+- "No defect" — un motivo a quadretti regolare e privo di difetti
+
+L'obiettivo del gemello digitale è il MONITORAGGIO DELLA QUALITÀ: individuare i
+difetti del tessuto in linea (prima che il rotolo sia finito e spedito),
+classificare il tipo di difetto in modo che gli operatori possano agire sulla
+causa principale corretta, e registrare i tassi di difetto nel tempo per il
+miglioramento del processo (es. carte SPC, perdite di qualità OEE).
+"""},
+
+{
+"id": "iso23247_mapping",
+"title": "Mappatura ISO 23247 — Architettura di Riferimento del Gemello Digitale",
+"content": """
+La norma ISO 23247 (Sistemi di automazione e integrazione — Framework del
+gemello digitale per la manifattura) definisce un'architettura di riferimento
+con le seguenti entità, qui mappate sul caso AOI del tessuto a quadretti:
+
+Observable Manufacturing Element (OME):
+  Il tessuto fisico al telaio di ispezione — la superficie del tessuto a
+  quadretti in movimento che è la "cosa" di cui si crea il gemello.
+
+Device Communication Entity (DCE):
+  La telecamera AOI e il frame grabber. Acquisisce immagini dell'OME e le rende
+  disponibili al gemello digitale (in questo prototipo: file immagine letti
+  dalla cartella dataset/, che simulano un feed di telecamera live).
+
+Data Collection and Device Control Entity:
+  La pipeline di pre-processing (ridimensionamento a 224x224, normalizzazione,
+  augmentation durante l'addestramento) che prepara le immagini grezze per il
+  Digital Twin Entity, e potrebbe in un deployment reale attivare azioni sul
+  dispositivo (es. segnalare un segmento di rotolo, attivare un cancello di
+  scarto).
+
+Digital Twin Entity (Core):
+  Il classificatore ResNet18 addestrato più il modulo di spiegabilità Grad-CAM.
+  Contiene la rappresentazione digitale di "come appare un difetto" appresa da
+  150 immagini etichettate, e produce una classe + confidenza + mappa di
+  salienza per ogni nuova immagine.
+
+User Entity:
+  La dashboard Streamlit: pagina Defect Classifier (inferenza e spiegabilità
+  lato operatore) e pagina Quality Assistant (recupero SOP basato su RAG).
+
+Cross System Entity:
+  Fuori scope per questo prototipo, ma in un impianto reale sarebbe il
+  Manufacturing Execution System (MES) / Quality Management System (QMS) a cui
+  il gemello digitale riporterebbe gli eventi di difetto, e che conterrebbe il
+  collegamento di tracciabilità tra un difetto, l'ID del rotolo di tessuto e il
+  telaio che lo ha prodotto.
+
+Questa mappatura è ciò che rende il prototipo un "gemello digitale" nel senso
+ISO 23247, piuttosto che un semplice modello ML autonomo: separa esplicitamente
+l'asset fisico (OME), il livello di sensing/comunicazione (DCE), la
+rappresentazione digitale (Core) e l'applicazione lato utente (User Entity).
+"""},
+
+{
+"id": "digital_twin_concept",
+"title": "Cosa Rende Questo un Gemello Digitale Data-Driven",
+"content": """
+Questo progetto segue il percorso del Gemello Digitale data-driven: invece di
+una simulazione first-principles del telaio, il gemello digitale viene
+apprenso direttamente dai dati operativi (immagini della superficie del
+tessuto, alcune difettose, altre no).
+
+Perché l'approccio data-driven è appropriato qui:
+- L'aspetto del difetto (un foro, un graffio) è definito visivamente, non
+  governato da un'equazione fisica trattabile — un modello di visione è la
+  scelta naturale.
+- La relazione tra "ciò che vede la telecamera" e "questo è uno scarto" è
+  esattamente la mappatura che un classificatore CNN apprende.
+- Il modello può essere ri-addestrato quando vengono introdotti nuovi tipi di
+  difetto o motivi del tessuto, senza dover ri-derivare un modello fisico.
+
+Ciclo del gemello digitale in questo prototipo:
+1. OME (tessuto) -> DCE (telecamera) produce un'immagine.
+2. Il Digital Twin Entity (ResNet18) predice una classe e una confidenza.
+3. Grad-CAM produce una mappa di salienza che mostra DOVE nell'immagine è
+   stata presa la decisione — questo è il livello di "spiegabilità" che
+   permette a un operatore di fidarsi (o contestare) l'output del gemello.
+4. Se viene predetto un difetto, lo User Entity (Quality Assistant) recupera
+   la SOP rilevante in modo che l'operatore sappia immediatamente la causa
+   probabile e l'azione correttiva — chiudendo il ciclo dal rilevamento
+   all'azione.
+
+Questo è l'obiettivo di "monitoraggio della qualità" definito nel percorso del
+Gemello Digitale data-driven: identificare i parametri/condizioni di processo
+(qui: le firme visive dei difetti) che influenzano la qualità del prodotto,
+usando dati operativi reali (il dataset di 150 immagini).
+"""},
+
+{
+"id": "dataset_and_model",
+"title": "Dataset e Modello — 150 Immagini, ResNet18, Grad-CAM",
+"content": """
+Dataset: 150 immagini di tessuto a quadretti, organizzate in 3 classi
+bilanciate (50 immagini ciascuna): "Circle", "Line", "No defect". Le immagini
+sono fotografie di un campione reale di tessuto a quadretti; i difetti "Circle"
+e "Line" sono stati creati posizionando un oggetto fisico (un foro perforato,
+un righello/lama metallica) sul tessuto per simulare la firma visiva di questi
+tipi di difetto.
+
+Pre-processing: tutte le immagini sono ridimensionate a 224x224 e convertite in
+tensori. Augmentation durante l'addestramento: flip orizzontale casuale,
+rotazione casuale (+/-10 gradi) e color jitter (luminosità/contrasto) per
+ridurre l'overfitting su un dataset piccolo.
+
+Modello: ResNet18 pre-addestrata su ImageNet, backbone congelata, strato finale
+completamente connesso sostituito con una testa lineare a 3 classi e ottimizzata
+per 8 epoche con Adam (lr=1e-3) e cross-entropy loss. ResNet18 con backbone
+congelata è la scelta standard per dataset piccoli / calcolo limitato:
+riutilizza le feature visive generiche (bordi, texture, forme) apprese da
+ImageNet e apprende solo il confine decisionale finale dalle 150 immagini
+disponibili.
+
+Spiegabilità: Grad-CAM viene calcolato sull'ultimo blocco residuo (layer4) di
+ResNet18, producendo una mappa di calore che evidenzia le regioni dell'immagine
+che hanno maggiormente influenzato la classe predetta — ad esempio dovrebbe
+evidenziare il foro per "Circle" o la linea del graffio per "Line".
+"""},
+
+{
+"id": "model_performance",
+"title": "Prestazioni del Modello — Risultati della Cross-Validation a 5-Fold",
+"content": """
+Il modello è stato valutato con cross-validation stratificata a 5-fold
+(random_state fissato per la riproducibilità): ogni fold addestra su 120
+immagini e testa sulle restanti 30 (10 per classe), e per ogni fold viene
+addestrata da zero una nuova testa ResNet18.
+
+Risultati riportati (vedi la pagina Model Performance per i numeri live
+dell'esecuzione di addestramento più recente):
+- Accuratezza media sui 5 fold: ~0.94 (94%)
+- L'accuratezza per fold varia da ~0.83 a 1.00 — cioè alcuni fold raggiungono
+  un'accuratezza perfetta sul loro set di test di 30 immagini, mentre altri
+  classificano erroneamente alcune immagini.
+- La matrice di confusione mostra che la confusione è concentrata tra "Circle"
+  e "No defect" — un foro piccolo/poco visibile può somigliare a un normale
+  spazio della trama se l'illuminazione non è uniforme.
+
+Come leggere la varianza tra i fold: con solo 30 immagini di test per fold, UNA
+immagine classificata erroneamente cambia già l'accuratezza di ~3.3 punti
+percentuali. L'intervallo 83%-100% è quindi rumore statistico atteso per un
+dataset di questa dimensione, non evidenza di un modello instabile — ma
+significa che la media del 94% dovrebbe essere riportata con la sua deviazione
+standard, non come una singola stima puntuale, e che più dati restringerebbero
+considerevolmente questa stima.
+"""},
+
+{
+"id": "sop_circle_defect",
+"title": "SOP — Difetto Circle (Foro / Perforazione)",
+"content": """
+Descrizione del difetto: un foro o una perforazione di forma
+approssimativamente circolare nella trama a quadretti, dove uno o più filati
+sono mancanti o strappati, lasciando uno spazio nel tessuto.
+
+Cause probabili, in ordine di frequenza:
+1. Rottura/estrazione del filato: un singolo filo di trama o ordito si rompe
+   durante la tessitura e viene estratto dal movimento alternativo del telaio,
+   lasciando un foro. Spesso causato da tensione eccessiva del filo o da una
+   sezione di filo debole/giuntata.
+2. Bruciatura da scintilla o brace: una particella incandescente (es. da un
+   processo di taglio o finitura vicino) cade sul tessuto e brucia uno o più
+   fili, lasciando un piccolo foro di bruciatura circolare.
+3. Perforazione da oggetto estraneo: una protuberanza affilata su un rullo
+   guida, un pettine o un filo di licciolo aggancia e strappa il tessuto al
+   suo passaggio.
+4. Danno da parassiti: danni da tarme o insetti al filato/tessuto stoccato,
+   visibili come piccoli fori circolari, spesso con bordi sfilacciati.
+
+Azioni correttive:
+1. Fermare la linea e isolare il segmento di rotolo interessato (segnare
+   metratura / posizione del rotolo per la tracciabilità).
+2. Controllare i percorsi dei filati di ordito e trama del telaio per filati
+   rotti o a bassa tensione vicino alla posizione del difetto; rinfilare o
+   ritensionare secondo necessità.
+3. Controllare rulli a monte, pettine e fili di licciolo per bave o spigoli
+   vivi usando un test con panno (un'imbroccatura sul panno indica una bava).
+4. Se sono presenti segni di bruciatura, ispezionare i processi termici vicini
+   (riscaldatori, stazioni di taglio) per scintille vaganti e verificare una
+   protezione adeguata.
+5. Registrare il difetto (tipo=Circle, ID rotolo, metratura, timestamp) per il
+   tracciamento SPC; se il tasso di difetti Circle supera il limite di
+   controllo, segnalare al supervisore di turno per un'ispezione del telaio.
+
+Gravità: tipicamente un difetto MAGGIORE (un foro è un guasto funzionale del
+tessuto, non solo estetico) — vedi il documento Quality Standard Reference per
+la classificazione a punti.
+"""},
+
+{
+"id": "sop_line_defect",
+"title": "SOP — Difetto Line (Graffio / Segno di Taglio)",
+"content": """
+Descrizione del difetto: un segno lineare che attraversa il motivo a
+quadretti — visivamente, un graffio, taglio o linea di abrasione dritta o
+quasi dritta che interrompe la griglia regolare della trama.
+
+Cause probabili, in ordine di frequenza:
+1. Bava affilata su un rullo guida o pettine: mentre il tessuto viaggia in
+   tensione su un rullo con un bordo intaccato o con bave, i filati
+   superficiali vengono abrasi o tagliati in linea retta nella direzione di
+   avanzamento.
+2. Stazione di taglio/rifilatura disallineata: una lama di taglio posizionata
+   leggermente troppo bassa incide la superficie del tessuto senza separarla
+   completamente.
+3. Filo o estremità di filato estraneo impigliato che striscia sul tessuto,
+   incidendo una linea mentre il tessuto avanza.
+4. Impigliamento del filato indotto da carica statica: la carica
+   elettrostatica fa aderire fibre sciolte alle parti della macchina che le
+   trascinano, lasciando un difetto a linea sottile.
+
+Azioni correttive:
+1. Fermare la linea e isolare il segmento di rotolo interessato (segnare
+   metratura / posizione del rotolo per la tracciabilità).
+2. Eseguire un test con panno o a mano su tutti i rulli e il pettine nella zona
+   a monte del difetto per individuare bave o spigoli vivi; rimuovere le bave
+   o sostituire il componente.
+3. Verificare l'altezza e l'allineamento della lama della stazione di
+   taglio/rifilatura rispetto alla specifica di setup; ricalibrare se fuori
+   tolleranza.
+4. Controllare la presenza di fili/fibre sciolte sugli elementi guida e
+   pulire come parte della manutenzione autonoma (checklist 5S / pulizia
+   giornaliera).
+5. Se si sospetta la presenza di carica statica, verificare il funzionamento
+   della barra antistatica/ionizzatore vicino al telaio di ispezione.
+6. Registrare il difetto (tipo=Line, ID rotolo, metratura, timestamp) per il
+   tracciamento SPC; difetti Line ricorrenti in una posizione simile del
+   rotolo su rotoli diversi indicano una causa meccanica fissa (un
+   rullo/lama specifico) piuttosto che un problema di qualità del filato.
+
+Gravità: tipicamente un difetto MAGGIORE se la trama è tagliata/abrasa
+completamente (punto debole strutturale); MINORE se sono disturbate solo le
+fibre superficiali senza rottura del filato — l'ispezione visiva della regione
+evidenziata da Grad-CAM insieme a un controllo manuale al tatto determina quale
+caso si applica.
+"""},
+
+{
+"id": "sop_no_defect",
+"title": "SOP — Classificazione \"No Defect\" e Rischio di Falsi Negativi",
+"content": """
+Una predizione "No defect" significa che la porzione ispezionata mostra un
+motivo a quadretti regolare e intatto: filati di ordito e trama continui,
+dimensione e allineamento dei quadretti costanti, nessun foro, taglio o segno
+estraneo.
+
+Criteri di accettazione per considerare una porzione genuinamente priva di
+difetti:
+- Dimensione del quadretto e allineamento della griglia coerenti con il motivo
+  di riferimento.
+- Nessuna rottura visibile nei filati di ordito o trama.
+- Nessuna scolorazione, macchia o materiale estraneo sulla superficie.
+
+Rischio di falsi negativi (la modalità di guasto più critica per la sicurezza
+in un sistema di qualità): un difetto reale classificato come "No defect"
+supera l'ispezione senza essere rilevato. In base alla matrice di confusione
+della cross-validation a 5-fold, la confusione principale osservata è tra
+"Circle" e "No defect" — fori piccoli o poco visibili vicino al bordo di un
+quadretto possono essere visivamente sottili, specialmente con illuminazione
+non uniforme.
+
+Mitigazioni per i falsi negativi in un deployment reale:
+1. Usare una soglia di confidenza: se la probabilità della classe migliore per
+   "No defect" è inferiore a una soglia impostata (es. 0.8) e la seconda
+   classe migliore è "Circle" o "Line", segnalare il fotogramma per la
+   revisione umana invece di farlo passare automaticamente.
+2. Standardizzare l'illuminazione del telaio di ispezione (diffusa, costante)
+   per ridurre l'ambiguità visiva che causa questa confusione.
+3. Verificare periodicamente a campione i fotogrammi "No defect" manualmente e
+   reinserire eventuali difetti non rilevati nel set di addestramento (ciclo
+   di active learning).
+"""},
+
+{
+"id": "quality_standard_reference",
+"title": "Riferimento allo Standard di Qualità — Sistema di Ispezione del Tessuto a 4 Punti",
+"content": """
+I lanifici/cotonifici classificano comunemente la qualità del tessuto usando
+sistemi di classificazione a punti come il sistema 4-Point (americano) o
+10-Point (correlato alla norma ASTM D5430, "Standard Test Methods for Visually
+Inspecting and Grading Fabrics"). Questi sistemi assegnano punti di penalità ai
+difetti in base alla loro lunghezza/dimensione, e limitano il totale dei punti
+per 100 iarde quadrate (o per una lunghezza di rotolo definita) che un rotolo
+può avere per essere classificato come "prima qualità".
+
+Fasce di penalità tipiche del sistema a 4 punti (illustrative):
+- Difetto fino a 3 pollici: 1 punto
+- Difetto 3-6 pollici: 2 punti
+- Difetto 6-9 pollici: 3 punti
+- Difetto oltre 9 pollici: 4 punti
+
+Come l'output del gemello digitale AOI si mappa su questo schema:
+- I difetti "Circle" (fori/perforazioni) sono tipicamente valutati nella fascia
+  di penalità più alta indipendentemente dalla dimensione, perché un foro è un
+  difetto strutturale, non solo estetico.
+- I difetti "Line" sono valutati in base alla loro lunghezza (il bounding box
+  AOI / l'estensione Grad-CAM fornisce una stima della lunghezza del difetto in
+  pixel, che può essere convertita in lunghezza fisica usando il campo visivo
+  noto).
+- I rotoli che superano il limite di punti per 100 iarde quadrate vengono
+  declassati a "seconda scelta" (prodotto di valore inferiore) o rifiutati, in
+  base all'accordo di qualità con l'acquirente.
+
+In un deployment completo, le classificazioni per fotogramma del gemello
+digitale verrebbero aggregate per rotolo per calcolare un totale punti
+progressivo e una classificazione automatica prima scelta / seconda scelta /
+scarto al termine di ogni rotolo.
+"""},
+
+{
+"id": "aoi_maintenance",
+"title": "Guida alla Manutenzione e Calibrazione della Stazione AOI",
+"content": """
+La qualità delle predizioni della stazione di Ispezione Ottica Automatica
+(AOI) dipende dalla coerenza dell'acquisizione delle immagini. Attività di
+manutenzione e calibrazione:
+
+Giornaliere (manutenzione autonoma / livello operatore):
+- Pulire l'obiettivo della telecamera e il vetro/coperchio del telaio di
+  ispezione da lanugine e polvere (la produzione di tessuto genera una
+  quantità significativa di fibre in aria).
+- Controllo visivo che tutte le unità di illuminazione siano funzionanti
+  (nessun LED debole/guasto) — un'illuminazione non uniforme è la causa
+  principale della confusione falsa "No defect" / "Circle" (vedi il documento
+  SOP — No Defect).
+- Verificare che la tensione e la velocità del tessuto al telaio di ispezione
+  siano nell'intervallo impostato; la sfocatura da movimento dovuta a velocità
+  eccessiva degrada la qualità dell'immagine.
+
+Settimanali (livello tecnico):
+- Ri-eseguire un set di immagini di calibrazione (campioni noti buoni e
+  difettosi) attraverso il modello e confrontare le predizioni con le metriche
+  di base della cross-validation a 5-fold; un calo significativo
+  dell'accuratezza indica deriva della telecamera, degrado dell'illuminazione o
+  un cambiamento del motivo del tessuto che richiede un nuovo addestramento.
+- Verificare la messa a fuoco della telecamera e l'allineamento del campo
+  visivo rispetto ai segni di riferimento.
+
+Periodiche (livello ingegneristico, es. al cambio del motivo del tessuto o
+dopo una deriva significativa dell'accuratezza):
+- Raccogliere nuove immagini etichettate per qualsiasi nuovo motivo del
+  tessuto o tipo di difetto e ri-addestrare/affinare il classificatore (la
+  pipeline di addestramento in scripts/train.py può essere rieseguita con una
+  cartella dataset/ aggiornata).
+- Rieseguire la cross-validation a 5-fold per confermare che il modello
+  ri-addestrato raggiunga o superi la baseline di accuratezza precedente prima
+  di distribuirlo sulla linea.
+"""},
+
+{
+"id": "deployment_integration",
+"title": "Deployment e Integrazione in un Sistema Industriale Reale",
+"content": """
+Questo prototipo legge immagini statiche da una cartella locale dataset/ ed
+esegue l'inferenza su richiesta dalla dashboard Streamlit. Un deployment reale
+sarebbe diverso come segue:
+
+Flusso dei dati:
+1. La telecamera AOI (DCE) trasmette fotogrammi in continuo mentre il tessuto
+   si muove.
+2. Un frame-grabber / dispositivo edge esegue la stessa pipeline di
+   pre-processing + inferenza ResNet18 (core/model.py) in tempo reale, ad
+   esempio alla velocità della linea (fotogrammi al secondo adattati al
+   throughput del tessuto).
+3. Ogni predizione (classe, confidenza, regione Grad-CAM, ID rotolo, metratura,
+   timestamp) viene scritta nel MES/QMS (Cross System Entity nei termini ISO
+   23247) per la tracciabilità e i grafici SPC.
+4. Se viene rilevato un difetto sopra una soglia di confidenza, il sistema può:
+   - generare un avviso per l'operatore sulla dashboard User Entity,
+   - attivare un marcatore/flag fisico sul rotolo di tessuto a quella
+     metratura,
+   - (in una linea completamente automatizzata) attivare un meccanismo di
+     scarto/deviazione.
+5. L'Assistente Qualità (RAG) sarebbe disponibile su un tablet/HMI al telaio
+   di ispezione, in modo che gli operatori possano chiedere immediatamente
+   "cosa significa un difetto Circle e cosa devo controllare?" senza lasciare
+   la linea.
+
+Sfide di integrazione da discutere criticamente:
+- Throughput in tempo reale: l'inferenza deve tenere il passo con la velocità
+  della linea; ResNet18 con backbone congelata è sufficientemente leggera per
+  questo su hardware edge/GPU modesto.
+- Domain shift: i difetti "Circle"/"Line" del prototipo sono stati creati
+  posizionando oggetti su tessuto buono, il che differisce visivamente dai
+  difetti che si verificano naturalmente (es. un vero foro da estrazione del
+  filato ha bordi sfilacciati che un foro perforato pulito non ha). Sarebbe
+  necessaria una fase pilota con rotoli realmente difettosi e un nuovo
+  addestramento prima del deployment completo.
+- Tracciabilità: collegare un evento di difetto a un rotolo/metratura/telaio
+  specifico richiede la sincronizzazione dei timestamp dei fotogrammi AOI con
+  il contatore encoder/metratura della linea — non implementato in questo
+  prototipo.
+- Stanchezza da allarmi: le soglie devono essere calibrate affinché gli
+  operatori non siano sovraccaricati da avvisi "forse difetto" a bassa
+  confidenza; l'approccio della soglia di confidenza nella SOP No Defect si
+  applica anche qui.
+"""},
+
+{
+"id": "limitations_discussion",
+"title": "Discussione Critica — Limitazioni del Dataset e del Modello",
+"content": """
+Limitazioni oneste di questo prototipo, da affrontare esplicitamente nella
+sezione di discussione critica del report del progetto:
+
+1. Dataset piccolo (N=150, 50 per classe): la cross-validation a 5-fold dà
+   un'accuratezza media di ~94% ma con una notevole varianza per fold
+   (83%-100%), che riflette la piccola dimensione del set di test (30
+   immagini/fold) piuttosto che un'accuratezza vera precisamente nota. Un
+   sistema in produzione richiederebbe centinaia o migliaia di immagini
+   etichettate per classe.
+
+2. Difetti sintetici / simulati: i difetti "Circle" e "Line" sono stati
+   creati posizionando oggetti fisici (un foro perforato, un righello/lama) su
+   tessuto altrimenti senza difetti, piuttosto che essere difetti di tessitura
+   naturalmente presenti. Questo è un approccio ragionevole e comune per un
+   piccolo prototipo studentesco, ma le firme visive dei difetti simulati
+   rispetto a quelli reali possono differire (es. nitidezza dei bordi,
+   artefatti di illuminazione/ombra dall'oggetto posizionato stesso, che il
+   modello potrebbe in parte imparare invece del "difetto" in sé). Le
+   visualizzazioni Grad-CAM dovrebbero essere controllate per confermare che
+   il modello si concentri sulla regione del difetto e non su artefatti di
+   ombra/illuminazione dovuti a come è stata allestita l'immagine.
+
+3. Singolo motivo del tessuto: il modello è addestrato solo su questo motivo
+   a quadretti blu/giallo. La generalizzazione ad altre dimensioni/colori di
+   quadretto o ad altri tipi di tessitura non è testata e probabilmente
+   richiede un nuovo addestramento.
+
+4. Nessun contesto temporale/posizionale: ogni fotogramma è classificato
+   indipendentemente; un sistema reale terrebbe traccia anche della frequenza
+   dei difetti lungo la lunghezza del rotolo (per SPC) e la correlerebbe con
+   le impostazioni del telaio/macchina (per l'analisi delle cause principali)
+   — questo prototipo dimostra solo la classificazione per fotogramma, che è
+   il blocco costitutivo del "monitoraggio della qualità", non l'intero
+   livello SPC/causa principale.
+
+5. La knowledge base RAG è un corpus prototipale: i documenti SOP in questo
+   Assistente Qualità sono illustrativi, scritti per questo progetto piuttosto
+   che ricavati dai manuali di qualità di un cotonificio reale. In un
+   deployment reale il corpus sarebbe costituito dalle SOP effettive del
+   cotonificio, dai manuali di manutenzione e dagli standard di qualità
+   tessile rilevanti (es. il testo completo della norma ASTM D5430).
+"""},
+
+]  # end of _DOCS_IT
+
+
 # ── TF-IDF retrieval ──────────────────────────────────────────────────────────
 
 class RAGKnowledgeBase:
     """TF-IDF retrieval with optional sentence-transformer upgrade."""
 
-    def __init__(self):
-        self._docs = _DOCS
-        self._texts = [d["title"] + "\n" + d["content"] for d in _DOCS]
+    def __init__(self, lang: str = "en"):
+        self.lang = lang
+        docs = _DOCS_IT if lang == "it" else _DOCS
+        self._docs = docs
+        self._texts = [d["title"] + "\n" + d["content"] for d in docs]
         self._tfidf_matrix = None
         self._vocab = {}
         self._semantic_embeddings = None
@@ -551,6 +1029,8 @@ class RAGKnowledgeBase:
 def compose_local_answer(query: str, results: List[Tuple[float, dict]], kb: RAGKnowledgeBase) -> str:
     """Compose an answer from retrieved documents without any LLM."""
     if not results:
+        if kb.lang == "it":
+            return "Nessuna informazione rilevante trovata nella knowledge base."
         return "No relevant information found in the knowledge base."
 
     best_score, best_doc = results[0]
@@ -598,7 +1078,7 @@ def _get_api_key() -> "str | None":
         return None
 
 
-def generate_answer(query: str, context_chunks: List[str]) -> "str | None":
+def generate_answer(query: str, context_chunks: List[str], lang: str = "en") -> "str | None":
     api_key = _get_api_key()
     if not api_key:
         return None
@@ -614,6 +1094,8 @@ def generate_answer(query: str, context_chunks: List[str]) -> "str | None":
         "context. If the context does not contain the answer, say so explicitly "
         "rather than guessing."
     )
+    if lang == "it":
+        system += " Respond in Italian, regardless of the language of the context."
     prompt = f"Context:\n\n{context}\n\nQuestion: {query}"
     try:
         client = anthropic.Anthropic(api_key=api_key)
@@ -630,11 +1112,10 @@ def generate_answer(query: str, context_chunks: List[str]) -> "str | None":
 
 # ── Singleton ─────────────────────────────────────────────────────────────────
 
-_kb: "RAGKnowledgeBase | None" = None
+_kb_cache: dict[str, RAGKnowledgeBase] = {}
 
 
-def get_knowledge_base() -> RAGKnowledgeBase:
-    global _kb
-    if _kb is None:
-        _kb = RAGKnowledgeBase()
-    return _kb
+def get_knowledge_base(lang: str = "en") -> RAGKnowledgeBase:
+    if lang not in _kb_cache:
+        _kb_cache[lang] = RAGKnowledgeBase(lang)
+    return _kb_cache[lang]

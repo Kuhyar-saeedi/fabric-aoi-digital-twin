@@ -13,19 +13,20 @@ from pathlib import Path
 import streamlit as st
 from streamlit_pdf_viewer import pdf_viewer
 
+from core.i18n import lang_selector, t
+
 st.set_page_config(page_title="Project Reports — Checkered Fabric AOI", page_icon="📄", layout="wide")
+
+lang_selector()
 
 ROOT = Path(__file__).resolve().parents[1]
 
-st.title("📄 Project Reports & Slides")
-st.caption(
-    "Final written report and presentation deck for the Smart Factories course project "
-    "work — view inline or download below."
-)
+st.title(t("rep_title"))
+st.caption(t("rep_caption"))
 
 DOCS = {
-    "📄 Final Report": ROOT / "final_report.pdf",
-    "📊 Presentation Slides": ROOT / "Fabric_Quality_Digital_Twin.pdf",
+    t("rep_tab_report"): ROOT / "final_report.pdf",
+    t("rep_tab_slides"): ROOT / "Fabric_Quality_Digital_Twin.pdf",
 }
 
 
@@ -39,12 +40,12 @@ tabs = st.tabs(list(DOCS.keys()))
 for tab, (label, path) in zip(tabs, DOCS.items()):
     with tab:
         if not path.exists():
-            st.error(f"`{path.name}` not found in the repository.")
+            st.error(t("rep_not_found", name=path.name))
             continue
 
         data = load_pdf(str(path))
         st.download_button(
-            f"⬇️ Download {path.name}",
+            t("rep_download", name=path.name),
             data=data,
             file_name=path.name,
             mime="application/pdf",

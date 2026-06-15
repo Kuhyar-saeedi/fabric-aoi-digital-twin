@@ -13,16 +13,20 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
+from core.i18n import get_lang, lang_selector, t
+
 st.set_page_config(page_title="Model Performance — Checkered Fabric AOI", page_icon="📈", layout="wide")
+
+lang_selector()
 
 ROOT = Path(__file__).resolve().parents[1]
 RESULTS_PATH = ROOT / "models" / "cv_results.json"
 
-st.title("📈 Model Performance")
-st.caption("Baseline KPIs and validation for the Digital Twin Entity (ResNet18 classifier)")
+st.title(t("perf_title"))
+st.caption(t("perf_caption"))
 
 if not RESULTS_PATH.exists():
-    st.error(f"{RESULTS_PATH} not found. Run `python scripts/train.py` first.")
+    st.error(t("err_model_not_found", path=RESULTS_PATH))
     st.stop()
 
 with open(RESULTS_PATH) as f:
@@ -31,41 +35,38 @@ with open(RESULTS_PATH) as f:
 classes = res["classes"]
 
 # ── Headline metrics ─────────────────────────────────────────────────────────
-st.subheader("1. 5-fold cross-validation accuracy")
+st.subheader(t("perf_sub1"))
 
 c1, c2, c3, c4 = st.columns(4)
 with c1:
-    st.metric("Average accuracy", f"{res['avg_accuracy']:.1%}")
+    st.metric(t("perf_met_avg"), f"{res['avg_accuracy']:.1%}")
 with c2:
-    st.metric("Std. deviation", f"{res['std_accuracy']:.1%}")
+    st.metric(t("perf_met_std"), f"{res['std_accuracy']:.1%}")
 with c3:
-    st.metric("Min fold accuracy", f"{min(res['fold_accuracies']):.1%}")
+    st.metric(t("perf_met_min"), f"{min(res['fold_accuracies']):.1%}")
 with c4:
-    st.metric("Max fold accuracy", f"{max(res['fold_accuracies']):.1%}")
+    st.metric(t("perf_met_max"), f"{max(res['fold_accuracies']):.1%}")
 
 fold_df = pd.DataFrame({
     "fold": [f"Fold {i+1}" for i in range(len(res["fold_accuracies"]))],
     "accuracy": res["fold_accuracies"],
 })
 fig = px.bar(fold_df, x="fold", y="accuracy", range_y=[0, 1.05],
-              title="Per-fold test accuracy (30 images/fold)",
+              title=t("perf_bar_title"),
               color_discrete_sequence=["#4C78A8"])
 fig.add_hline(y=res["avg_accuracy"], line_dash="dash", line_color="red",
-               annotation_text=f"average = {res['avg_accuracy']:.1%}")
+               annotation_text=t("perf_hline", val=f"{res['avg_accuracy']:.1%}"))
 st.plotly_chart(fig, use_container_width=True)
 
 st.warning(
-    "**Read the spread, not just the average.** With only 30 test images per "
-    "fold, a single misclassification shifts accuracy by ~3.3 points. The "
-    f"{min(res['fold_accuracies']):.0%}–{max(res['fold_accuracies']):.0%} range "
-    "is expected sampling noise for this dataset size, not model instability — "
-    "but it means the 94% headline number should always be reported with its "
-    "standard deviation, and more labelled data would tighten this estimate.",
+    t("perf_warning",
+      minv=f"{min(res['fold_accuracies']):.0%}",
+      maxv=f"{max(res['fold_accuracies']):.0%}"),
     icon="⚠️",
 )
 
 # ── Confusion matrix ─────────────────────────────────────────────────────────
-st.subheader("2. Confusion matrix (aggregated across all 5 folds)")
+st.subheader(t("perf_sub2"))
 
 cm = res["confusion_matrix"]
 fig_cm = go.Figure(data=go.Heatmap(
@@ -73,9 +74,9 @@ fig_cm = go.Figure(data=go.Heatmap(
     text=cm, texttemplate="%{text}", showscale=True,
 ))
 fig_cm.update_layout(
-    xaxis_title="Predicted", yaxis_title="True",
+    xaxis_title=t("perf_cm_predicted"), yaxis_title=t("perf_cm_true"),
     yaxis=dict(autorange="reversed"),
-    title="Confusion matrix (150 predictions total, 30 per fold x 5 folds)",
+    title=t("perf_cm_title"),
 )
 st.plotly_chart(fig_cm, use_container_width=True)
 
@@ -87,16 +88,13 @@ np.fill_diagonal(off_diag, 0)
 if off_diag.sum() > 0:
     i, j = np.unravel_index(off_diag.argmax(), off_diag.shape)
     st.caption(
-        f"Largest confusion: {off_diag[i, j]} image(s) with true label "
-        f"**{classes[i]}** predicted as **{classes[j]}**. This matches the "
-        "'No Defect' SOP discussion: subtle holes can resemble normal weave "
-        "under uneven lighting."
+        t("perf_confusion_caption", n=off_diag[i, j], true=classes[i], pred=classes[j])
     )
 else:
-    st.caption("No misclassifications in this run — all confusion is in the per-fold variance above.")
+    st.caption(t("perf_no_confusion"))
 
 # ── Classification report ───────────────────────────────────────────────────
-st.subheader("3. Classification report (aggregated)")
+st.subheader(t("perf_sub3"))
 report = res["classification_report"]
 report_df = pd.DataFrame(report).T
 report_df = report_df.round(3)
@@ -104,9 +102,46 @@ st.dataframe(report_df, use_container_width=True)
 
 # ── Critical discussion ─────────────────────────────────────────────────────
 st.divider()
-st.subheader("4. Critical discussion — limitations and recommendations")
+st.subheader(t("perf_sub4"))
 
-st.markdown(f"""
+if get_lang() == "it":
+    st.markdown(f"""
+**Dimensione del dataset.** {res['n_images']} immagini totali, 50 per classe. La
+cross-validation a 5-fold con {res['epochs_per_fold']} epoche/fold fornisce un
+confronto *relativo* solido tra i fold, ma la stima di accuratezza *assoluta* ha
+un'ampia incertezza (dev. std = {res['std_accuracy']:.1%}). Un sistema in
+produzione richiederebbe centinaia o migliaia di immagini per classe, raccolte
+dalla telecamera di ispezione reale in condizioni di illuminazione di produzione.
+
+**Difetti simulati vs. reali.** I difetti "Circle" e "Line" in questo dataset
+sono stati creati posizionando oggetti fisici (un foro perforato, un righello/lama)
+su tessuto privo di difetti. Questo è un approccio ragionevole per un prototipo, ma
+i difetti reali di tessitura (rotture del filo, abrasioni) potrebbero avere firme
+di bordo/ombra diverse. Grad-CAM (pagina Defect Classifier) dovrebbe essere usato
+per confermare che il modello si concentri sulla regione del difetto stesso, e non
+su artefatti di messa in scena come le ombre proiettate dall'oggetto posizionato.
+
+**Backbone congelata.** Viene addestrato solo lo strato lineare finale; la backbone
+convoluzionale ResNet18 mantiene i suoi pesi ImageNet. Questo è appropriato per un
+dataset di 150 immagini (evita l'overfitting su un numero molto maggiore di
+parametri) ma limita l'accuratezza raggiungibile — il fine-tuning di strati più
+profondi con più dati potrebbe migliorare la discriminazione tra classi
+visivamente simili (Circle vs No defect).
+
+**Singolo motivo del tessuto.** Il modello ha visto solo questo motivo a quadretti
+blu/giallo. Distribuirlo su una dimensione/colore di quadretto diverso o su un tipo
+di tessitura diverso richiederebbe probabilmente dati etichettati aggiuntivi e un
+nuovo addestramento.
+
+**Raccomandazione per il deployment.** Usa una soglia di confidenza (es. 0.7,
+segnalata nella pagina Defect Classifier) per instradare le predizioni a basso
+confidenza verso la revisione umana, esegui il controllo di calibrazione AOI
+settimanale (Quality Assistant — AOI Maintenance), e considera questo valore del
+94% +/- {res['std_accuracy']:.1%} come una baseline pilota da rimisurare una volta
+raccolte immagini di produzione reali.
+""")
+else:
+    st.markdown(f"""
 **Dataset size.** {res['n_images']} images total, 50 per class. 5-fold CV with
 {res['epochs_per_fold']} epochs/fold gives a robust *relative* comparison
 across folds, but the *absolute* accuracy estimate has wide uncertainty

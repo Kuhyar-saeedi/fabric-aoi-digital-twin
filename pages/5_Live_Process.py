@@ -24,22 +24,22 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from core.model import CLASSES, load_model, predict  # noqa: E402
+from core.i18n import get_lang, lang_selector, t  # noqa: E402
 
 st.set_page_config(page_title="Live Process — Checkered Fabric AOI", page_icon="🏭", layout="wide")
+
+lang_selector()
 
 DATASET_DIR = ROOT / "dataset_web" if (ROOT / "dataset_web").exists() else ROOT / "dataset"
 MODEL_PATH = ROOT / "models" / "fabric_classifier.pth"
 TEMPLATE_PATH = ROOT / "assets" / "factory_floor_template.html"
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
-st.title("🏭 Live Process — Digital Twin SCADA Floor")
-st.caption(
-    "Raw Material → Weaving Unit (OME)  →  Digital Twin Hub / QC Scanner (DCE + DT Core)  "
-    "→  routing: HRC Packing Cell, Rework Unit, or Shredder/Recycle loop (User Entity)"
-)
+st.title(t("live_title"))
+st.caption(t("live_caption"))
 
 if not MODEL_PATH.exists():
-    st.error(f"Model weights not found at {MODEL_PATH}. Run `python scripts/train.py` first.")
+    st.error(t("err_model_not_found", path=MODEL_PATH))
     st.stop()
 
 
@@ -53,10 +53,10 @@ model = _load()
 # ── Controls ─────────────────────────────────────────────────────────────────
 c1, c2 = st.columns(2)
 with c1:
-    cls = st.selectbox("Class", CLASSES)
+    cls = st.selectbox(t("live_select_class"), CLASSES)
 with c2:
     files = sorted((DATASET_DIR / cls).glob("*.jpg"))
-    fname = st.selectbox("Image", [f.name for f in files])
+    fname = st.selectbox(t("live_select_image"), [f.name for f in files])
 
 image = Image.open(DATASET_DIR / cls / fname)
 pred_class, probs = predict(model, image, device=DEVICE)
@@ -76,12 +76,5 @@ html = (
 components.html(html, height=760, scrolling=False)
 
 st.caption(
-    f"Selected frame: **{cls}/{fname}** — Digital Twin Core (ResNet18) predicts "
-    f"**{pred_class}** at **{confidence:.1%}** confidence. Click **▶ Run Inspection Cycle** "
-    "inside the floor view to animate the part through weaving, the QC scanner, and its "
-    "routed destination. Picking a new image reloads the floor for the next cycle. For "
-    "**Line** defects, drag the **Rework QA** slider before/during the rework loop: at or "
-    "above 70% the repaired part clears the QC Scanner and proceeds to packing/warehouse; "
-    "below 70% it is sent back to the Rework Unit and re-checked, looping until the QA "
-    "score clears the threshold."
+    t("live_caption_main", cls=cls, fname=fname, pred=pred_class, conf=f"{confidence:.1%}")
 )

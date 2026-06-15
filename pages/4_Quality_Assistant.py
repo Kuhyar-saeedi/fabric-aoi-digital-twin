@@ -60,10 +60,10 @@ def _tts_html(text: str, answer_id: int, lang: str = "en") -> str:
 def _stop_speaking_html(label: str) -> str:
     return f"""
 <button onclick="window.parent.speechSynthesis.cancel()" style="
-    width:100%;padding:7px 0;margin-top:4px;
+    display:inline-block;padding:6px 14px;margin-top:1px;
     background:#3a1a1a;border:1px solid #8B2222;border-radius:6px;
-    color:#ff6b6b;font-size:13px;font-weight:600;cursor:pointer;
-    font-family:inherit;transition:background .2s;"
+    color:#ff6b6b;font-size:12px;font-weight:600;cursor:pointer;
+    font-family:inherit;white-space:nowrap;transition:background .2s;"
     onmouseover="this.style.background='#5a2020'"
     onmouseout="this.style.background='#3a1a1a'">
     {label}
@@ -71,72 +71,75 @@ def _stop_speaking_html(label: str) -> str:
 """
 
 
-_VOICE_HTML_TMPL = (
-    '<div style="display:flex;align-items:center;gap:10px;padding:2px 0;">'
-    '  <button id="micBtn" onclick="toggleMic()" style="'
-    '    background:#252836;border:1px solid #3a3d4e;border-radius:6px;'
-    '    padding:7px 16px;font-size:13px;color:#ccc;cursor:pointer;'
-    '    transition:all .2s;white-space:nowrap;font-family:inherit;">'
-    '    __VOICE_BTN__'
-    '  </button>'
-    '  <span id="micStatus" style="font-size:11px;color:#777;flex:1;"></span>'
-    '</div>'
-    '<script>'
-    'let _rec=null,_on=false;'
-    'function toggleMic(){_on?stopMic():startMic();}'
-    'function startMic(){'
-    '  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;'
-    "  if(!SR){setS('No STT — use Chrome/Edge');return;}"
-    "  _rec=new SR();_rec.lang='__STT_LANG__';_rec.continuous=false;_rec.interimResults=true;"
-    '  _rec.onstart=()=>{'
-    '    _on=true;'
-    "    const b=document.getElementById('micBtn');"
-    "    b.textContent='Stop';"
-    "    b.style.cssText+='background:#4CAF50;color:#000;border-color:#4CAF50;';"
-    "    setS('Listening...');"
-    '  };'
-    '  _rec.onresult=(e)=>{'
-    "    let t='';"
-    '    for(let i=e.resultIndex;i<e.results.length;i++)t+=e.results[i][0].transcript;'
-    "    const preview=t.length>55?t.substring(0,55)+'...':t;"
-    "    setS('>> '+preview);"
-    '    if(e.results[e.results.length-1].isFinal)submitQ(t);'
-    '  };'
-    "  _rec.onerror=(e)=>{setS('Error: '+e.error);resetBtn();};"
-    '  _rec.onend=resetBtn;'
-    '  _rec.start();'
-    '}'
-    'function stopMic(){if(_rec)_rec.stop();}'
-    'function resetBtn(){'
-    '  _on=false;'
-    "  const b=document.getElementById('micBtn');"
-    "  b.textContent='__VOICE_BTN__';"
-    "  b.style.background='#252836';b.style.color='#ccc';b.style.borderColor='#3a3d4e';"
-    '}'
-    "function setS(s){const el=document.getElementById('micStatus');if(el)el.textContent=s;}"
-    'function submitQ(text){'
-    '  const ta=window.parent.document.querySelector('
-    "    'textarea[data-testid=\"stChatInputTextArea\"]');"
-    "  if(!ta){setS('Failed: '+text);return;}"
-    '  const setter=Object.getOwnPropertyDescriptor('
-    "    window.parent.HTMLTextAreaElement.prototype,'value').set;"
-    '  setter.call(ta,text);'
-    "  ta.dispatchEvent(new Event('input',{bubbles:true}));"
-    '  setTimeout(()=>{'
-    "    ta.dispatchEvent(new KeyboardEvent('keydown',"
-    "      {key:'Enter',keyCode:13,bubbles:true,cancelable:true}));"
-    "    setS('Submitted!');"
-    "    setTimeout(()=>setS(''),2500);"
-    '  },130);'
-    '}'
-    '</script>'
-)
+# Voice-input mic button (Web Speech API). The recognized transcript is
+# written into a hidden st.text_input (matched by aria-label) so Python can
+# read it on the next rerun -- avoids relying on st.chat_input internals.
+_VOICE_HIDDEN_LABEL = "qa_voice_raw_input"
 
 
-def _voice_html(lang: str = "en") -> str:
-    stt_lang = "it-IT" if lang == "it" else "en-US"
-    voice_btn = t("qa_voice_btn")
-    return _VOICE_HTML_TMPL.replace("__STT_LANG__", stt_lang).replace("__VOICE_BTN__", voice_btn)
+def _voice_html(stt_lang: str, voice_btn_label: str) -> str:
+    return f"""
+<div style="display:flex;align-items:center;gap:8px;">
+  <button id="micBtn" style="
+      background:#252836;border:1px solid #3a3d4e;border-radius:6px;
+      padding:6px 14px;margin-top:1px;font-size:12px;color:#ccc;cursor:pointer;
+      white-space:nowrap;font-family:inherit;font-weight:600;transition:all .2s;">
+    {voice_btn_label}
+  </button>
+  <span id="micStatus" style="font-size:11px;color:#888;"></span>
+</div>
+<script>
+(function(){{
+  let _rec=null, _on=false;
+  const btn=document.getElementById('micBtn');
+  const status=document.getElementById('micStatus');
+
+  btn.onclick=()=>{{_on?stopMic():startMic();}};
+
+  function startMic(){{
+    const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+    if(!SR){{status.textContent='No STT - use Chrome/Edge';return;}}
+    _rec=new SR();
+    _rec.lang='{stt_lang}';
+    _rec.continuous=false;
+    _rec.interimResults=true;
+    _rec.onstart=()=>{{
+      _on=true;
+      btn.style.background='#4CAF50';btn.style.color='#000';btn.style.borderColor='#4CAF50';
+      status.textContent='Listening...';
+    }};
+    _rec.onresult=(e)=>{{
+      let text='';
+      for(let i=e.resultIndex;i<e.results.length;i++)text+=e.results[i][0].transcript;
+      const preview=text.length>40?text.substring(0,40)+'...':text;
+      status.textContent='>> '+preview;
+      if(e.results[e.results.length-1].isFinal)submitQ(text);
+    }};
+    _rec.onerror=(e)=>{{status.textContent='Error: '+e.error;resetBtn();}};
+    _rec.onend=resetBtn;
+    _rec.start();
+  }}
+  function stopMic(){{if(_rec)_rec.stop();}}
+  function resetBtn(){{
+    _on=false;
+    btn.style.background='#252836';btn.style.color='#ccc';btn.style.borderColor='#3a3d4e';
+  }}
+  function submitQ(text){{
+    const inp=window.parent.document.querySelector('input[aria-label="{_VOICE_HIDDEN_LABEL}"]');
+    if(!inp){{status.textContent='Failed: no target';return;}}
+    const setter=Object.getOwnPropertyDescriptor(window.parent.HTMLInputElement.prototype,'value').set;
+    setter.call(inp,text);
+    inp.dispatchEvent(new Event('input',{{bubbles:true}}));
+    setTimeout(()=>{{
+      inp.dispatchEvent(new KeyboardEvent('keydown',{{key:'Enter',keyCode:13,bubbles:true,cancelable:true}}));
+      status.textContent='Sent!';
+      setTimeout(()=>{{status.textContent='';}},2000);
+    }},80);
+  }}
+}})();
+</script>
+"""
+
 
 st.title(t("qa_title"))
 st.caption(t("qa_caption"))
@@ -144,12 +147,29 @@ st.caption(t("qa_caption"))
 lang = get_lang()
 kb = get_knowledge_base(lang)
 
+# ── Sidebar: knowledge-base reference ───────────────────────────────────────
+with st.sidebar:
+    st.markdown(f"#### {t('qa_kb_sidebar_hdr')}")
+    with st.expander(t("qa_kb_expander"), expanded=False):
+        for doc in kb._docs:
+            st.markdown(f"- **{doc['title']}**")
+
 import core.rag as ragmod
 has_claude = ragmod._get_api_key() is not None
 if has_claude:
     st.success(t("qa_claude_success"), icon="🤖")
 else:
     st.info(t("qa_claude_info"), icon="ℹ️")
+
+for _k, _v in [
+    ("qa_history", []),
+    ("qa_tts_enabled", True),
+    ("qa_answer_tts", ""),
+    ("qa_answer_counter", 0),
+    ("qa_last_voice_transcript", ""),
+]:
+    if _k not in st.session_state:
+        st.session_state[_k] = _v
 
 EXAMPLES = [
     t("qa_ex1"),
@@ -159,6 +179,8 @@ EXAMPLES = [
     t("qa_ex5"),
 ]
 
+st.divider()
+st.markdown(f"### {t('qa_chat_hdr')}")
 st.markdown(t("qa_try_example"))
 cols = st.columns(len(EXAMPLES))
 clicked = None
@@ -166,51 +188,16 @@ for col, ex in zip(cols, EXAMPLES):
     if col.button(ex, use_container_width=True):
         clicked = ex
 
-for _k, _v in [
-    ("qa_history", []),
-    ("qa_tts_enabled", True),
-    ("qa_answer_tts", ""),
-    ("qa_answer_counter", 0),
-]:
-    if _k not in st.session_state:
-        st.session_state[_k] = _v
+st.write("")
 
-# ── Voice controls ─────────────────────────────────────────────────────────────
-st.divider()
-st.caption(t("qa_voice_caption"))
-voice_col, tts_col = st.columns([2, 1])
-with voice_col:
-    components.html(_voice_html(lang), height=50)
-with tts_col:
-    st.session_state.qa_tts_enabled = st.toggle(
-        t("qa_tts_toggle"), value=st.session_state.qa_tts_enabled
-    )
-if st.session_state.qa_tts_enabled:
-    components.html(_stop_speaking_html(t("qa_stop_speaking")), height=46)
-
-query = st.chat_input(t("qa_chat_placeholder")) or clicked
-
-if query:
-    results = kb.retrieve(query, top_k=3)
-    answer = None
-    if has_claude:
-        answer = generate_answer(query, [d["content"] for _, d in results], lang)
-    if answer is None:
-        answer = compose_local_answer(query, results, kb)
-    st.session_state.qa_history.append((query, answer, results))
-
-    _clean = re.sub(r"\*\*(.+?)\*\*", r"\1", answer)
-    _clean = re.sub(r"[#*`]", "", _clean).strip()
-    st.session_state.qa_answer_tts = _clean[:400]
-    st.session_state.qa_answer_counter += 1
-
-for query, answer, results in reversed(st.session_state.qa_history):
+# ── Chat history ─────────────────────────────────────────────────────────────
+for hist_query, hist_answer, hist_results in reversed(st.session_state.qa_history):
     with st.chat_message("user"):
-        st.markdown(query)
+        st.markdown(hist_query)
     with st.chat_message("assistant"):
-        st.markdown(answer)
-        with st.expander(t("qa_sources", n=len(results))):
-            for score, doc in results:
+        st.markdown(hist_answer)
+        with st.expander(t("qa_sources", n=len(hist_results))):
+            for score, doc in hist_results:
                 st.markdown(t("qa_source_relevance", title=doc["title"], score=f"{score:.2f}"))
                 st.caption(doc["content"].strip()[:300] + "...")
 
@@ -221,8 +208,64 @@ if st.session_state.qa_tts_enabled and st.session_state.qa_answer_tts:
         height=0,
     )
 
-if not st.session_state.qa_history:
-    st.markdown("---")
-    with st.expander(t("qa_kb_expander")):
-        for doc in kb._docs:
-            st.markdown(f"- **{doc['title']}**")
+# ── Voice & audio controls (bottom of page, just above the chat input) ────────
+stt_lang = "it-IT" if lang == "it" else "en-US"
+
+# Hidden text input used as a bridge: the mic button's JS writes the
+# recognized transcript here, matched by its aria-label.
+st.text_input(_VOICE_HIDDEN_LABEL, key="qa_voice_raw", label_visibility="collapsed")
+st.markdown(
+    f"""
+    <style>
+    div[data-testid="stTextInput"]:has(input[aria-label="{_VOICE_HIDDEN_LABEL}"]) {{
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        opacity: 0;
+        pointer-events: none;
+    }}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+with st.container(border=True):
+    st.markdown(f"**{t('qa_voice_hdr')}**")
+    st.caption(t("qa_voice_caption"))
+    ctrl_cols = st.columns([1, 1.6, 1.6, 5])
+    with ctrl_cols[0]:
+        components.html(_voice_html(stt_lang, t("qa_voice_btn")), height=40)
+    with ctrl_cols[1]:
+        st.session_state.qa_tts_enabled = st.toggle(
+            t("qa_tts_toggle"), value=st.session_state.qa_tts_enabled
+        )
+    with ctrl_cols[2]:
+        if st.session_state.qa_tts_enabled:
+            components.html(_stop_speaking_html(t("qa_stop_speaking")), height=40)
+
+voice_query = None
+_voice_raw = st.session_state.get("qa_voice_raw", "")
+if _voice_raw and _voice_raw != st.session_state.qa_last_voice_transcript:
+    st.session_state.qa_last_voice_transcript = _voice_raw
+    voice_query = _voice_raw
+
+chat_query = st.chat_input(t("qa_chat_placeholder"))
+
+query = chat_query or clicked or voice_query
+
+if query:
+    with st.spinner(t("qa_thinking")):
+        results = kb.retrieve(query, top_k=3)
+        answer = None
+        if has_claude:
+            answer = generate_answer(query, [d["content"] for _, d in results], lang)
+        if answer is None:
+            answer = compose_local_answer(query, results, kb)
+    st.session_state.qa_history.append((query, answer, results))
+
+    _clean = re.sub(r"\*\*(.+?)\*\*", r"\1", answer)
+    _clean = re.sub(r"[#*`]", "", _clean).strip()
+    st.session_state.qa_answer_tts = _clean[:400]
+    st.session_state.qa_answer_counter += 1
+    st.rerun()

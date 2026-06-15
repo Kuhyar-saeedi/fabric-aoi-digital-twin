@@ -230,6 +230,10 @@ _T: dict[str, dict[str, str]] = {
 "qa_tts_toggle": {"en": "🔊 Read answers aloud", "it": "🔊 Leggi le risposte ad alta voce"},
 "qa_voice_btn": {"en": "🎙 Voice", "it": "🎙 Voce"},
 "qa_stop_speaking": {"en": "⏹ Stop Speaking", "it": "⏹ Ferma lettura"},
+"qa_chat_hdr": {"en": "💬 Conversation", "it": "💬 Conversazione"},
+"qa_voice_hdr": {"en": "🎛️ Voice & Audio Controls", "it": "🎛️ Controlli vocali e audio"},
+"qa_thinking": {"en": "🤔 Thinking...", "it": "🤔 Sto pensando..."},
+"qa_kb_sidebar_hdr": {"en": "📖 Reference", "it": "📖 Riferimenti"},
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE 5 — Live Process

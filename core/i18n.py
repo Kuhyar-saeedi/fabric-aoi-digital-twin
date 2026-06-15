@@ -219,6 +219,18 @@ _T: dict[str, dict[str, str]] = {
 "qa_ex4": {"en": "How does the AOI station need to be maintained?", "it": "Come deve essere mantenuta la stazione AOI?"},
 "qa_ex5": {"en": "How accurate is the model and what are its limitations?", "it": "Quanto è accurato il modello e quali sono i suoi limiti?"},
 
+"qa_voice_caption": {
+    "en": "🎙 Click **Voice** and speak your question, or type it below. Toggle "
+          "**Read answers aloud** to have responses read back to you — click "
+          "**Stop Speaking** at any time to interrupt.",
+    "it": "🎙 Clicca su **Voce** e pronuncia la tua domanda, oppure scrivila qui sotto. "
+          "Attiva **Leggi le risposte ad alta voce** per farti leggere le risposte — "
+          "clicca su **Ferma lettura** in qualsiasi momento per interromperla.",
+},
+"qa_tts_toggle": {"en": "🔊 Read answers aloud", "it": "🔊 Leggi le risposte ad alta voce"},
+"qa_voice_btn": {"en": "🎙 Voice", "it": "🎙 Voce"},
+"qa_stop_speaking": {"en": "⏹ Stop Speaking", "it": "⏹ Ferma lettura"},
+
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE 5 — Live Process
 # ══════════════════════════════════════════════════════════════════════════════

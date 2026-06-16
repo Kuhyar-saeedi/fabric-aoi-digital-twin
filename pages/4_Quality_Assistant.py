@@ -71,11 +71,6 @@ def _stop_speaking_html(label: str) -> str:
 """
 
 
-# Voice-input mic button (Web Speech API). The recognized transcript is
-# written into a hidden st.text_input (matched by aria-label) so Python can
-# read it on the next rerun -- avoids relying on st.chat_input internals.
-_VOICE_HIDDEN_LABEL = "qa_voice_raw_input"
-
 
 def _voice_html(stt_lang: str, voice_btn_label: str) -> str:
     return f"""
@@ -125,16 +120,16 @@ def _voice_html(stt_lang: str, voice_btn_label: str) -> str:
     btn.style.background='#252836';btn.style.color='#ccc';btn.style.borderColor='#3a3d4e';
   }}
   function submitQ(text){{
-    const inp=window.parent.document.querySelector('input[aria-label="{_VOICE_HIDDEN_LABEL}"]');
-    if(!inp){{status.textContent='Failed: no target';return;}}
-    const setter=Object.getOwnPropertyDescriptor(window.parent.HTMLInputElement.prototype,'value').set;
-    setter.call(inp,text);
-    inp.dispatchEvent(new Event('input',{{bubbles:true}}));
+    const ta=window.parent.document.querySelector('textarea[data-testid="stChatInputTextArea"]');
+    if(!ta){{status.textContent='Failed: no chat input';return;}}
+    const setter=Object.getOwnPropertyDescriptor(window.parent.HTMLTextAreaElement.prototype,'value').set;
+    setter.call(ta,text);
+    ta.dispatchEvent(new Event('input',{{bubbles:true}}));
     setTimeout(()=>{{
-      inp.dispatchEvent(new KeyboardEvent('keydown',{{key:'Enter',keyCode:13,bubbles:true,cancelable:true}}));
+      ta.dispatchEvent(new KeyboardEvent('keydown',{{key:'Enter',keyCode:13,bubbles:true,cancelable:true}}));
       status.textContent='Sent!';
       setTimeout(()=>{{status.textContent='';}},2000);
-    }},80);
+    }},130);
   }}
 }})();
 </script>
@@ -166,7 +161,6 @@ for _k, _v in [
     ("qa_tts_enabled", True),
     ("qa_answer_tts", ""),
     ("qa_answer_counter", 0),
-    ("qa_last_voice_transcript", ""),
 ]:
     if _k not in st.session_state:
         st.session_state[_k] = _v
@@ -211,24 +205,6 @@ if st.session_state.qa_tts_enabled and st.session_state.qa_answer_tts:
 # ── Voice & audio controls (bottom of page, just above the chat input) ────────
 stt_lang = "it-IT" if lang == "it" else "en-US"
 
-# Hidden text input used as a bridge: the mic button's JS writes the
-# recognized transcript here, matched by its aria-label.
-st.text_input(_VOICE_HIDDEN_LABEL, key="qa_voice_raw", label_visibility="collapsed")
-st.markdown(
-    f"""
-    <style>
-    div[data-testid="stTextInput"]:has(input[aria-label="{_VOICE_HIDDEN_LABEL}"]) {{
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        overflow: hidden;
-        opacity: 0;
-        pointer-events: none;
-    }}
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
 
 with st.container(border=True):
     st.markdown(f"**{t('qa_voice_hdr')}**")
@@ -244,15 +220,9 @@ with st.container(border=True):
         if st.session_state.qa_tts_enabled:
             components.html(_stop_speaking_html(t("qa_stop_speaking")), height=40)
 
-voice_query = None
-_voice_raw = st.session_state.get("qa_voice_raw", "")
-if _voice_raw and _voice_raw != st.session_state.qa_last_voice_transcript:
-    st.session_state.qa_last_voice_transcript = _voice_raw
-    voice_query = _voice_raw
-
 chat_query = st.chat_input(t("qa_chat_placeholder"))
 
-query = chat_query or clicked or voice_query
+query = chat_query or clicked
 
 if query:
     with st.spinner(t("qa_thinking")):
